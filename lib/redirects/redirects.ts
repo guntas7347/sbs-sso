@@ -2,7 +2,7 @@
 
 export const clients = {
   "3QIDAQAB": {
-    redirectUri: "http://localhost:3001/login",
+    redirectUri: "https://majorproject.guntassandhu.com/login",
   },
 
   sarthi: {

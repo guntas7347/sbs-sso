@@ -15,16 +15,19 @@ export default function HodReset() {
 
     setLoading(true);
     try {
-      const response = await fetch("http://localhost:5000/internal/sso/generate-reset-code", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
+      const response = await fetch(
+        "https://sbs-sso-api.guntassandhu.com/internal/sso/generate-reset-code",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            username: username.trim(),
+            apiKey: "asnjhijcs",
+          }),
         },
-        body: JSON.stringify({
-          username: username.trim(),
-          apiKey: "asnjhijcs",
-        }),
-      });
+      );
 
       const data = await response.json();
       if (response.ok && data.success) {
@@ -40,14 +43,27 @@ export default function HodReset() {
   };
 
   return (
-    <div style={{ padding: "40px", fontFamily: "sans-serif", maxWidth: "400px", margin: "0 auto" }}>
+    <div
+      style={{
+        padding: "40px",
+        fontFamily: "sans-serif",
+        maxWidth: "400px",
+        margin: "0 auto",
+      }}
+    >
       <h2>HOD Reset Code Generator</h2>
       <p style={{ color: "#666", fontSize: "14px" }}>
         Testing utility to generate a password reset code for any user.
       </p>
-      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+      <form
+        onSubmit={handleSubmit}
+        style={{ display: "flex", flexDirection: "column", gap: "12px" }}
+      >
         <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-          <label htmlFor="username" style={{ fontWeight: "bold", fontSize: "14px" }}>
+          <label
+            htmlFor="username"
+            style={{ fontWeight: "bold", fontSize: "14px" }}
+          >
             Username
           </label>
           <input
