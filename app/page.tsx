@@ -152,13 +152,15 @@ function LoginForm() {
               <button
                 type="button"
                 onClick={() => {
-                  if (
-                    typeof window !== "undefined" &&
-                    window.history.length > 1
-                  ) {
-                    window.history.back();
-                  } else if (typeof window !== "undefined") {
-                    window.location.reload();
+                  if (typeof window !== "undefined") {
+                    window.close();
+                    setTimeout(() => {
+                      if (!window.closed) {
+                        alert(
+                          "Please close this browser tab or window to return to your application.",
+                        );
+                      }
+                    }, 250);
                   }
                 }}
                 className="w-full py-3.5 px-6 bg-gradient-to-r from-brand-orange to-brand-orange-hover hover:from-brand-orange-hover hover:to-brand-orange text-white font-bold rounded-xl shadow-md hover:shadow-lg hover:shadow-brand-orange/10 transform hover:-translate-y-[1px] active:translate-y-0 active:scale-[0.99] transition-all duration-150 cursor-pointer text-center text-sm tracking-wide flex items-center justify-center gap-2"
@@ -173,10 +175,10 @@ function LoginForm() {
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    d="M10 19l-7-7m0 0l7-7m-7 7h18"
+                    d="M6 18L18 6M6 6l12 12"
                   />
                 </svg>
-                Return to Application
+                Close Webpage
               </button>
             </div>
           </div>
@@ -202,14 +204,23 @@ function LoginForm() {
     );
   }
 
+  const currentClient =
+    callBackParam && clients[callBackParam as ClientId]
+      ? clients[callBackParam as ClientId]
+      : null;
+
   return (
     <div className="flex min-h-screen bg-slate-100 dark:bg-[#090d16] text-slate-800 dark:text-slate-100 transition-colors duration-300">
       {/* Left Column: Branding and University info - hidden on mobile, visible on lg viewports */}
       <BrandSection
         badgeText="Official Portal Gate"
         titlePrefix="Connecting You to"
-        titleGradient="Your Academic Journey"
-        description="Sign in with your centralized credentials to securely connect to official resources, student and staff portals, research hubs, and communication networks."
+        titleGradient={currentClient?.name || "Your Academic Journey"}
+        description={
+          currentClient?.description
+            ? `Sign in with your centralized credentials to access ${currentClient.name}. ${currentClient.description}.`
+            : "Sign in with your centralized credentials to securely connect to official resources, student and staff portals, research hubs, and communication networks."
+        }
         statusText="All authentication gateways are fully operational"
         securityGuideline="Never disclose your password or TOTP parameters to anyone."
       />
@@ -220,12 +231,51 @@ function LoginForm() {
         <ThemeToggle />
 
         {/* Login form container */}
-        <div className="my-auto w-full max-w-md mx-auto space-y-8 py-8">
+        <div className="my-auto w-full max-w-md mx-auto space-y-6 py-8">
           {/* Logo & Heading */}
           <SSOHeader
             title="Single Sign-On"
-            description="Provide your identity parameters and multi-factor authenticator token to verify."
+            description={
+              currentClient?.name
+                ? `Provide your identity parameters and multi-factor token to verify access for ${currentClient.name}.`
+                : "Provide your identity parameters and multi-factor authenticator token to verify."
+            }
           />
+
+          {/* Client Application Details Card */}
+          {currentClient && (
+            <div className="p-4 rounded-2xl bg-white dark:bg-slate-900/70 border border-slate-200/80 dark:border-slate-800 shadow-sm flex items-center gap-3.5 transition-all">
+              <div className="size-12 shrink-0 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/70 flex items-center justify-center overflow-hidden relative">
+                <img
+                  src={currentClient.logo || "/sbssu-logo.png"}
+                  alt={currentClient.name}
+                  className="size-8 object-contain"
+                  onError={(e) => {
+                    const target = e.currentTarget;
+                    target.style.display = "none";
+                    const fallback = target.nextElementSibling as HTMLElement;
+                    if (fallback) fallback.style.display = "flex";
+                  }}
+                />
+                <div className="hidden size-full items-center justify-center font-black text-xs text-brand-orange bg-brand-orange/10">
+                  {currentClient.name.slice(0, 2).toUpperCase()}
+                </div>
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
+                    Signing in to
+                  </span>
+                </div>
+                <h2 className="text-sm font-extrabold text-slate-900 dark:text-white truncate mt-0.5">
+                  {currentClient.name}
+                </h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                  {currentClient.description}
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Secure Connection established badge */}
           <ConnectionBadge />
