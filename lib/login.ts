@@ -1,9 +1,9 @@
 "use server";
 
-import { comparePassword, hashPassword } from "../bycrypt";
-import { createAuthorizationCode } from "../jwt";
-import { clients, ClientId } from "../redirects/redirects";
-import { verifyAuthenticatorToken, generateAuthenticatorSecret } from "../totp";
+import { comparePassword, hashPassword } from "./bycrypt";
+import { createAuthorizationCode } from "./jwt";
+import { clients, ClientId } from "./redirects";
+import { verifyAuthenticatorToken, generateAuthenticatorSecret } from "./totp";
 import { redirect } from "next/navigation";
 
 const API_KEY = process.env.API_KEY!;
@@ -56,11 +56,6 @@ export const handleLogin = async (
       username: user.username,
       codeChallenge: challenge,
     });
-
-    console.log("Auth code:", authCode);
-    console.log("Challenge:", challenge);
-    console.log("Callback ID:", callbackId);
-    console.log("Callback:", clients[callbackId as ClientId]);
 
     if (callbackId && clients[callbackId as ClientId]) {
       const redirectUri = clients[callbackId as ClientId].redirectUri;
@@ -176,8 +171,4 @@ export const resetPasswordAction = async (
       error: "Unable to connect to authentication server",
     };
   }
-};
-
-export const getNewTotpSecret = async () => {
-  return generateAuthenticatorSecret();
 };

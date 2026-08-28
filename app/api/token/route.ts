@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { verifyJwtToken } from "@/lib/jwt";
-import { callUserApi } from "@/lib/actions/login";
+import { callUserApi } from "@/lib/login";
 import crypto from "crypto";
 
 export async function POST(request: Request) {

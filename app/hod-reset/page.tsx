@@ -1,6 +1,11 @@
 "use client";
 
+// THIS PAGE IS DEV ONLY. IT WILL NOT BE PART OF FINAL APP. SO WE WILL KEEP IT SIMPLE
+
 import { useState } from "react";
+
+const HOD_RESET_URL =
+  "https://sbs-sso-api.guntassandhu.com/internal/sso/generate-reset-code";
 
 export default function HodReset() {
   const [username, setUsername] = useState("");
@@ -15,19 +20,16 @@ export default function HodReset() {
 
     setLoading(true);
     try {
-      const response = await fetch(
-        "https://sbs-sso-api.guntassandhu.com/internal/sso/generate-reset-code",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            username: username.trim(),
-            apiKey: "asnjhijcs",
-          }),
+      const response = await fetch(HOD_RESET_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
-      );
+        body: JSON.stringify({
+          username: username.trim(),
+          apiKey: "asnjhijcs",
+        }),
+      });
 
       const data = await response.json();
       if (response.ok && data.success) {

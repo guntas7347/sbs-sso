@@ -26,6 +26,6 @@ export const createAuthorizationCode = async (
   payload: AuthorizationCodePayload,
 ): Promise<string> => {
   return jwt.sign(payload, JWT_SECRET, {
-    expiresIn: 30, // 60 seconds
+    expiresIn: 30,
   });
 };
