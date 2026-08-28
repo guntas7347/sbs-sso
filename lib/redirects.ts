@@ -1,12 +1,11 @@
 // clients.ts
 
 export const clients = {
-  "3QIDAQAB": {
-    redirectUri: "https://majorproject.guntassandhu.com/login",
-  },
-
   sarthi: {
     redirectUri: "https://sarthi.example.com/auth/callback",
+  },
+  "3QIDAQAB": {
+    redirectUri: "https://majorproject.guntassandhu.com/login",
   },
 } as const;
 

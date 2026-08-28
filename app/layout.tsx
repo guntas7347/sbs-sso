@@ -15,6 +15,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "SBS SSO | Login to SBSSU",
   description: "SSO for SBSSU",
+  icons: {
+    icon: "/sbssu-logo.png",
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

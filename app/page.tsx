@@ -4,6 +4,7 @@ import { useForm } from "@/hooks/useForm";
 import { handleLogin } from "@/lib/login";
 import { useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
+import { clients, ClientId } from "@/lib/redirects";
 
 // Shared Components
 import { BrandSection } from "@/components/BrandSection";
@@ -15,9 +16,23 @@ import { SecurityFooter } from "@/components/SecurityFooter";
 
 function LoginForm() {
   const [loginError, setLoginError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
   const searchParams = useSearchParams();
-  const callBackParam = searchParams.get("callBack") || undefined;
-  const challengeParam = searchParams.get("challenge") || undefined;
+
+  const callBackParam =
+    searchParams.get("callBack") || searchParams.get("callback") || undefined;
+  const challengeParam =
+    searchParams.get("challenge") ||
+    searchParams.get("code_challenge") ||
+    undefined;
+
+  const isValidCallback = Boolean(
+    callBackParam && clients[callBackParam as ClientId],
+  );
+  const isValidChallenge = Boolean(
+    challengeParam && challengeParam.trim().length > 0,
+  );
+  const isValidRequest = isValidCallback && isValidChallenge;
 
   // Initialize useForm with default values
   const { form, handleChange, error, checkError, setCheckError, setFields } =
@@ -36,6 +51,9 @@ function LoginForm() {
       return;
     }
 
+    setLoading(true);
+    setLoginError(null);
+
     try {
       const res = await handleLogin(
         form.username.trim(),
@@ -49,16 +67,140 @@ function LoginForm() {
       }
 
       console.log("Login returned:", res.data);
-
       setLoginError(null);
-      alert("Login Successful");
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const errorObj = err as { message?: string };
+      if (errorObj?.message?.includes("NEXT_REDIRECT")) {
+        throw err;
+      }
       console.error("Login failed:", err);
       setLoginError(
-        err.message || "Invalid username, password, or OTP. Please try again.",
+        errorObj?.message ||
+          "Invalid username, password, or OTP. Please try again.",
       );
+    } finally {
+      setLoading(false);
     }
   };
+
+  // If request is missing valid callback or challenge parameters, show Invalid Sign-In Request UI
+  if (!isValidRequest) {
+    return (
+      <div className="flex min-h-screen bg-slate-100 dark:bg-[#090d16] text-slate-800 dark:text-slate-100 transition-colors duration-300">
+        {/* Left Column: Branding and University info */}
+        <BrandSection
+          badgeText="Security Gateway"
+          titlePrefix="Centralized Access"
+          titleGradient="Security Protocol"
+          description="Shaheed Bhagat Singh State University SSO provides secure and unified authentication for university portals, student management systems, and academic networks."
+          statusText="SSO authorization gateway active"
+          securityGuideline="Sign-in sessions must originate from registered and verified university applications."
+        />
+
+        {/* Right Column: Invalid Request Message Card */}
+        <div className="w-full lg:w-5/12 flex flex-col justify-between p-6 sm:p-12 md:p-16 relative bg-slate-50 dark:bg-[#0c1220] transition-colors duration-300">
+          {/* Floating Theme Toggler */}
+          <ThemeToggle />
+
+          {/* Invalid Request Container */}
+          <div className="my-auto w-full max-w-md mx-auto space-y-6 py-8">
+            {/* Logo & Heading */}
+            <SSOHeader
+              title="Invalid Sign-In Request"
+              description="Authentication handshake could not be established."
+            />
+
+            {/* Warning Message Card */}
+            <div className="p-6 rounded-2xl bg-amber-500/10 dark:bg-amber-500/10 border border-amber-500/25 dark:border-amber-500/20 backdrop-blur-sm space-y-4 animate-[fadeIn_0.3s_ease]">
+              <div className="flex items-start gap-3.5">
+                <div className="p-2.5 rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5">
+                  <svg
+                    className="w-6 h-6"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                    />
+                  </svg>
+                </div>
+                <div className="space-y-1">
+                  <h2 className="text-base font-bold text-slate-900 dark:text-white">
+                    Invalid Sign-In Request
+                  </h2>
+                  <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed font-medium">
+                    This sign-in page was opened without a valid application
+                    request.
+                  </p>
+                </div>
+              </div>
+
+              <div className="border-t border-amber-500/20 pt-3.5 text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                <p>
+                  Please return to the application you were trying to sign in to
+                  and start the sign-in process again.
+                </p>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="space-y-2.5 pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  if (
+                    typeof window !== "undefined" &&
+                    window.history.length > 1
+                  ) {
+                    window.history.back();
+                  } else if (typeof window !== "undefined") {
+                    window.location.reload();
+                  }
+                }}
+                className="w-full py-3.5 px-6 bg-gradient-to-r from-brand-orange to-brand-orange-hover hover:from-brand-orange-hover hover:to-brand-orange text-white font-bold rounded-xl shadow-md hover:shadow-lg hover:shadow-brand-orange/10 transform hover:-translate-y-[1px] active:translate-y-0 active:scale-[0.99] transition-all duration-150 cursor-pointer text-center text-sm tracking-wide flex items-center justify-center gap-2"
+              >
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2.5}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M10 19l-7-7m0 0l7-7m-7 7h18"
+                  />
+                </svg>
+                Return to Application
+              </button>
+            </div>
+          </div>
+
+          {/* Warning Policy / Help link footer */}
+          <SecurityFooter
+            policyType="auth"
+            links={[
+              {
+                label: "Forgot Password?",
+                href: "/forgot-password",
+                colorClass: "text-brand-green hover:text-brand-green-hover",
+              },
+              {
+                label: "Admin Utility",
+                href: "/hod-reset",
+                colorClass: "text-brand-orange hover:text-brand-orange-hover",
+              },
+            ]}
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen bg-slate-100 dark:bg-[#090d16] text-slate-800 dark:text-slate-100 transition-colors duration-300">
@@ -120,6 +262,7 @@ function LoginForm() {
               placeholder="Enter your username"
               value={form.username}
               onChange={handleChange}
+              disabled={loading}
               error={checkError && !!error.username}
               errorText="Username credentials are required"
               icon={
@@ -149,6 +292,7 @@ function LoginForm() {
               placeholder="Enter your password"
               value={form.password}
               onChange={handleChange}
+              disabled={loading}
               error={checkError && !!error.password}
               errorText="Secret password is required"
               showPasswordToggle={true}
@@ -181,6 +325,7 @@ function LoginForm() {
               label="TOTP Auth Code"
               placeholder="Enter 6-digit TOTP code"
               value={form.totp}
+              disabled={loading}
               onChange={(e) => {
                 const val = e.target.value.replace(/[^0-9]/g, "");
                 setFields({ totp: val });
@@ -207,9 +352,36 @@ function LoginForm() {
             {/* Submit Button */}
             <button
               type="submit"
-              className="w-full py-3.5 px-6 bg-gradient-to-r from-brand-orange to-brand-orange-hover hover:from-brand-orange-hover hover:to-brand-orange text-white font-bold rounded-xl shadow-md hover:shadow-lg hover:shadow-brand-orange/10 transform hover:-translate-y-[1px] active:translate-y-0 active:scale-[0.99] transition-all duration-150 cursor-pointer text-center text-sm tracking-wide mt-2"
+              disabled={loading}
+              className="w-full py-3.5 px-6 bg-gradient-to-r from-brand-orange to-brand-orange-hover hover:from-brand-orange-hover hover:to-brand-orange text-white font-bold rounded-xl shadow-md hover:shadow-lg hover:shadow-brand-orange/10 transform hover:-translate-y-[1px] active:translate-y-0 active:scale-[0.99] transition-all duration-150 cursor-pointer disabled:opacity-75 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-2 text-center text-sm tracking-wide mt-2"
             >
-              Secure Authenticate
+              {loading ? (
+                <>
+                  <svg
+                    className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    />
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    />
+                  </svg>
+                  <span>Authenticating...</span>
+                </>
+              ) : (
+                "Secure Authenticate"
+              )}
             </button>
           </form>
         </div>
@@ -235,9 +407,35 @@ function LoginForm() {
   );
 }
 
+function SSOLoadingScreen() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-slate-100 dark:bg-[#090d16] text-slate-800 dark:text-slate-100 transition-colors duration-300">
+      <div className="flex flex-col items-center gap-4 p-8 rounded-2xl bg-white/70 dark:bg-slate-900/70 backdrop-blur-md border border-slate-200/80 dark:border-slate-800/80 shadow-lg animate-[fadeIn_0.3s_ease]">
+        <div className="relative flex items-center justify-center size-16">
+          <div className="absolute inset-0 rounded-full border-2 border-brand-orange/20 border-t-brand-orange animate-spin" />
+          <div className="absolute inset-2 rounded-full border-2 border-brand-green/20 border-b-brand-green animate-[spin_1.5s_linear_infinite_reverse]" />
+          <img
+            src="/sbssu-logo.png"
+            alt="SBS Logo"
+            className="size-8 object-contain animate-pulse"
+          />
+        </div>
+        <div className="text-center">
+          <p className="text-sm font-bold text-slate-900 dark:text-white">
+            Initializing Gateway
+          </p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+            Verifying security handshake...
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Home() {
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<SSOLoadingScreen />}>
       <LoginForm />
     </Suspense>
   );
