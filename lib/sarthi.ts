@@ -1,9 +1,11 @@
+"use server";
+
 import { verifyAuthenticatorToken } from "./totp";
 import { hashPassword } from "./bycrypt";
 
-export const USER_API_URL = process.env.USER_API_URL!;
-export const RESET_API_URL = process.env.RESET_API_URL!;
-export const API_KEY = process.env.API_KEY!;
+const USER_API_URL = process.env.USER_API_URL!;
+const RESET_API_URL = process.env.RESET_API_URL!;
+const API_KEY = process.env.API_KEY!;
 
 export const sarthiGetUser = async (username: string) => {
   try {

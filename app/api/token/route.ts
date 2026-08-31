@@ -30,8 +30,6 @@ export async function POST(request: Request) {
       );
     }
 
-    console.log("Processing SSO token exchange with code and code_verifier");
-
     // Verify JWT authorization code
     const payload = await verifyJwtToken(code);
     if (!payload || typeof payload === "string") {
@@ -89,15 +87,12 @@ export async function POST(request: Request) {
         ).trim() || userData.username,
     };
 
-    console.log("SSO LOGIN TOKEN GRANTED FOR", userPayload.username);
-
     // Return the actual user data
     return NextResponse.json({
       success: true,
       user: userPayload,
     });
   } catch (error: any) {
-    console.error("Token verification route error:", error);
     return NextResponse.json(
       { success: false, message: error?.message || "Internal server error" },
       { status: 500 },

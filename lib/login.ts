@@ -1,6 +1,6 @@
 "use server";
 
-import { comparePassword, hashPassword } from "./bycrypt";
+import { comparePassword } from "./bycrypt";
 import {
   createAuthorizationCode,
   createSessionToken,
