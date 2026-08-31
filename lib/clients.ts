@@ -1,4 +1,4 @@
-// clients.ts
+// lib/clients.ts
 
 export type Client = {
   name: string;
@@ -14,7 +14,6 @@ export const clients = {
     logo: "/clients/sarthi.png",
     redirectUri: "https://sarthi.example.com/auth/callback",
   },
-
   grievance: {
     name: "SBS Service Portal",
     description: "Submit and track university service requests",

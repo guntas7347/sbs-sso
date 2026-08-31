@@ -1,14 +1,16 @@
 "use server";
 
 import { comparePassword, hashPassword } from "./bycrypt";
-import { createAuthorizationCode } from "./jwt";
-import { clients, ClientId } from "./redirects";
-import { verifyAuthenticatorToken, generateAuthenticatorSecret } from "./totp";
+import {
+  createAuthorizationCode,
+  createSessionToken,
+  verifyJwtToken,
+} from "./jwt";
+import { clients, ClientId } from "./clients";
+import { verifyAuthenticatorToken } from "./totp";
 import { redirect } from "next/navigation";
-
-const API_KEY = process.env.API_KEY!;
-const USER_API_URL = process.env.USER_API_URL!;
-const RESET_API_URL = process.env.RESET_API_URL!;
+import { cookies } from "next/headers";
+import { sarthiGetUser } from "./sarthi";
 
 export const handleLogin = async (
   username: string,
@@ -21,7 +23,7 @@ export const handleLogin = async (
   let userData: any = null;
 
   try {
-    const result = await callUserApi(username);
+    const result = await sarthiGetUser(username);
     if (!result.success) {
       return { success: false, error: result.error };
     }
@@ -41,7 +43,6 @@ export const handleLogin = async (
       return { success: false, error: "Invalid username or password" };
     }
 
-    // Verify TOTP token
     const totpKey = user.totpKey || user.totp;
     if (!totpKey) {
       return { success: false, error: "MFA is not configured for this user" };
@@ -51,6 +52,30 @@ export const handleLogin = async (
     if (!isTokenValid) {
       return { success: false, error: "Invalid TOTP" };
     }
+
+    const fullName =
+      (
+        (user.otherdata?.firstName || "") +
+        " " +
+        (user.otherdata?.lastName || "")
+      ).trim() ||
+      user.name ||
+      user.username;
+
+    // Create 24-hour local JWT session cookie
+    const sessionToken = await createSessionToken({
+      username: user.username,
+      name: fullName,
+    });
+
+    const cookieStore = await cookies();
+    cookieStore.set("sso_session", sessionToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 24 * 60 * 60, // 24 hours
+    });
 
     const authCode = await createAuthorizationCode({
       username: user.username,
@@ -79,96 +104,81 @@ export const handleLogin = async (
   };
 };
 
-export const callUserApi = async (username: string) => {
+export const getActiveSession = async () => {
   try {
-    const response = await fetch(USER_API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        username,
-        apiKey: API_KEY,
-      }),
-    });
+    const cookieStore = await cookies();
+    const sessionCookie = cookieStore.get("sso_session");
+    if (!sessionCookie?.value) {
+      return { success: false };
+    }
 
-    const data = await response.json();
-
-    if (!response.ok) {
-      return {
-        success: false,
-        error: data.message || "Failed to fetch user details",
-      };
+    const payload = await verifyJwtToken(sessionCookie.value);
+    if (!payload || typeof payload === "string" || !payload.username) {
+      return { success: false };
     }
 
     return {
       success: true,
-      data,
+      username: payload.username as string,
+      name: (payload.name as string) || (payload.username as string),
     };
   } catch (error) {
-    console.error("Fetch user details error:", error);
-    return {
-      success: false,
-      error: "Unable to connect to authentication server",
-    };
+    console.error("Get active session error:", error);
+    return { success: false };
   }
 };
 
-export const resetPasswordAction = async (
-  username: string,
-  newPassword: string,
-  totpCode: string,
-  totpKey: string,
-  resetCode: string,
-  resetExpiry: any,
+export const handleSessionLogin = async (
+  callbackId?: string,
+  challenge?: string,
 ) => {
+  let redirectUrl: string | null = null;
+
   try {
-    // 1. Verify TOTP code entered by user
-    if (!totpKey) {
-      return { success: false, error: "MFA is not configured for this user" };
+    const cookieStore = await cookies();
+    const sessionCookie = cookieStore.get("sso_session");
+    if (!sessionCookie?.value) {
+      return { success: false, error: "No active session found" };
     }
 
-    const isTokenValid = verifyAuthenticatorToken(totpCode, totpKey);
-    if (!isTokenValid) {
-      return { success: false, error: "Invalid TOTP code" };
+    const payload = await verifyJwtToken(sessionCookie.value);
+    if (!payload || typeof payload === "string" || !payload.username) {
+      return { success: false, error: "Session has expired or is invalid" };
     }
 
-    const hashedPassword = await hashPassword(newPassword);
-
-    // 2. Call reset-password API
-    const response = await fetch(RESET_API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        username,
-        newPassword: hashedPassword,
-        totpKey,
-        resetCode,
-        resetExpiry,
-        apiKey: API_KEY,
-      }),
+    const authCode = await createAuthorizationCode({
+      username: payload.username as string,
+      codeChallenge: challenge,
     });
 
-    const data = await response.json();
-
-    if (!response.ok) {
-      return {
-        success: false,
-        error: data.message || "Failed to reset password",
-      };
+    if (callbackId && clients[callbackId as ClientId]) {
+      const redirectUri = clients[callbackId as ClientId].redirectUri;
+      redirectUrl = `${redirectUri}?code=${authCode}`;
     }
-
-    return {
-      success: true,
-      data,
-    };
   } catch (error) {
-    console.error("Reset password action error:", error);
+    console.error("Session login error:", error);
     return {
       success: false,
-      error: "Unable to connect to authentication server",
+      error: "Session Authentication Failed",
     };
+  }
+
+  if (redirectUrl) {
+    redirect(redirectUrl);
+  }
+
+  return {
+    success: true,
+  };
+};
+
+export const clearSessionAction = async () => {
+  try {
+    const cookieStore = await cookies();
+    cookieStore.delete("sso_session");
+    return { success: true };
+  } catch (error) {
+    console.error("Clear session error:", error);
+    return { success: false };
   }
 };

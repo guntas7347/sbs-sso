@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState, useEffect, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { callUserApi, resetPasswordAction } from "@/lib/login";
+import { sarthiGetUser, sarthiResetPassword } from "@/lib/sarthi";
 import { generateAuthenticatorSecret } from "@/lib/totp";
 import QRCode from "react-qr-code";
 
@@ -46,7 +46,7 @@ function ForgotPasswordContent() {
 
     try {
       // 1. Fetch user details from /user API (via server action)
-      const res = await callUserApi(userToVerify.trim());
+      const res = await sarthiGetUser(userToVerify.trim());
       if (!res.success) {
         throw new Error(res.error || "User not found");
       }
@@ -131,7 +131,7 @@ function ForgotPasswordContent() {
       const originalResetExpiry = userData.resetExpiry || userData.resetexpiry;
 
       // Call /reset-password API (via server action)
-      const res = await resetPasswordAction(
+      const res = await sarthiResetPassword(
         username.trim(),
         newPassword,
         totp.trim(),
@@ -429,9 +429,7 @@ function ForgotPasswordContent() {
                 label="3. Enter Newly Generated TOTP Code"
                 placeholder="Enter 6-digit TOTP code"
                 value={totp}
-                onChange={(e) =>
-                  setTotp(e.target.value.replace(/[^0-9]/g, ""))
-                }
+                onChange={(e) => setTotp(e.target.value.replace(/[^0-9]/g, ""))}
                 required
                 disabled={loading}
                 icon={

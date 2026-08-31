@@ -29,3 +29,14 @@ export const createAuthorizationCode = async (
     expiresIn: 30,
   });
 };
+
+export const createSessionToken = async (payload: {
+  username: string;
+  name?: string;
+}): Promise<string> => {
+  return jwt.sign(payload, JWT_SECRET, {
+    expiresIn: "24h",
+  });
+};
+
+
