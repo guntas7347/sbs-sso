@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { verifyJwtToken } from "@/lib/jwt";
-import { callUserApi } from "@/lib/login";
 import crypto from "crypto";
+import { sarthiGetUser } from "@/lib/sarthi";
 
 export async function POST(request: Request) {
   try {
@@ -50,10 +50,7 @@ export async function POST(request: Request) {
     }
 
     function generateCodeChallenge(verifier: string): string {
-      return crypto
-        .createHash("sha256")
-        .update(verifier)
-        .digest("base64url");
+      return crypto.createHash("sha256").update(verifier).digest("base64url");
     }
 
     const codeVerify = generateCodeChallenge(code_verifier);
@@ -67,7 +64,7 @@ export async function POST(request: Request) {
     }
 
     // Fetch user details using username
-    const result = await callUserApi(username);
+    const result = await sarthiGetUser(username);
     if (!result.success || !result.data?.user) {
       return NextResponse.json(
         {
@@ -85,9 +82,11 @@ export async function POST(request: Request) {
       role: userData.role,
       userId: userData.id,
       fullName:
-        ((userData.otherdata?.firstName || "") +
+        (
+          (userData.otherdata?.firstName || "") +
           " " +
-          (userData.otherdata?.lastName || "")).trim() || userData.username,
+          (userData.otherdata?.lastName || "")
+        ).trim() || userData.username,
     };
 
     console.log("SSO LOGIN TOKEN GRANTED FOR", userPayload.username);
@@ -108,8 +107,10 @@ export async function POST(request: Request) {
 
 export async function GET() {
   return NextResponse.json(
-    { success: false, message: "Method not allowed. Use POST to exchange authorization code." },
+    {
+      success: false,
+      message: "Method not allowed. Use POST to exchange authorization code.",
+    },
     { status: 405 },
   );
 }
-
