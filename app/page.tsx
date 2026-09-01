@@ -41,7 +41,9 @@ function LoginForm() {
     callBackParam && clients[callBackParam as ClientId],
   );
   const isUnregisteredChild = Boolean(
-    !isRegisteredClient && redirectUriParam && redirectUriParam.trim().length > 0,
+    !isRegisteredClient &&
+    redirectUriParam &&
+    redirectUriParam.trim().length > 0,
   );
   const isValidChallenge = Boolean(
     challengeParam && challengeParam.trim().length > 0,
@@ -159,7 +161,6 @@ function LoginForm() {
     }
   };
 
-
   // If request is missing valid callback or challenge parameters, show Invalid Sign-In Request UI
   if (!isValidRequest) {
     return (
@@ -269,11 +270,6 @@ function LoginForm() {
                 href: "/forgot-password",
                 colorClass: "text-brand-green hover:text-brand-green-hover",
               },
-              {
-                label: "Admin Utility",
-                href: "/hod-reset",
-                colorClass: "text-brand-orange hover:text-brand-orange-hover",
-              },
             ]}
           />
         </div>
@@ -285,7 +281,11 @@ function LoginForm() {
     <div className="flex min-h-screen bg-slate-100 dark:bg-[#090d16] text-slate-800 dark:text-slate-100 transition-colors duration-300">
       {/* Left Column: Branding and University info - hidden on mobile, visible on lg viewports */}
       <BrandSection
-        badgeText={isUnregisteredChild ? "External Authorization" : "Official Portal Gate"}
+        badgeText={
+          isUnregisteredChild
+            ? "External Authorization"
+            : "Official Portal Gate"
+        }
         titlePrefix="Connecting You to"
         titleGradient={appDisplayName || "Your Academic Journey"}
         description={
@@ -406,7 +406,9 @@ function LoginForm() {
               <div className="p-5 rounded-2xl bg-white dark:bg-slate-900/80 border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-4">
                 <div className="flex items-center gap-3.5">
                   <div className="size-12 rounded-xl bg-gradient-to-br from-brand-orange to-brand-orange-hover text-white flex items-center justify-center font-black text-lg shadow-sm">
-                    {(sessionUser.name || sessionUser.username).slice(0, 2).toUpperCase()}
+                    {(sessionUser.name || sessionUser.username)
+                      .slice(0, 2)
+                      .toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
@@ -426,7 +428,8 @@ function LoginForm() {
                 <div className="border-t border-slate-100 dark:border-slate-800/80 pt-3">
                   <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
                     Click continue to instantly authorize your access
-                    {appDisplayName ? ` to ${appDisplayName}` : ""} without re-entering credentials.
+                    {appDisplayName ? ` to ${appDisplayName}` : ""} without
+                    re-entering credentials.
                   </p>
                 </div>
               </div>
@@ -465,7 +468,9 @@ function LoginForm() {
                     </>
                   ) : (
                     <>
-                      <span>Continue as {sessionUser.name || sessionUser.username}</span>
+                      <span>
+                        Continue as {sessionUser.name || sessionUser.username}
+                      </span>
                       <svg
                         className="w-4 h-4"
                         fill="none"
@@ -511,11 +516,20 @@ function LoginForm() {
             </div>
           ) : (
             /* Manual Form */
-            <form onSubmit={handleSubmit} className="space-y-5 animate-[fadeIn_0.3s_ease]">
+            <form
+              onSubmit={handleSubmit}
+              className="space-y-5 animate-[fadeIn_0.3s_ease]"
+            >
               {sessionUser && (
                 <div className="flex items-center justify-between p-3 rounded-xl bg-brand-orange/10 border border-brand-orange/20 text-xs">
                   <span className="text-slate-700 dark:text-slate-300 truncate">
-                    Saved session: <strong className="text-brand-orange">{sessionUser.name || sessionUser.username}</strong> <span className="text-slate-500 dark:text-slate-400">(@{sessionUser.username})</span>
+                    Saved session:{" "}
+                    <strong className="text-brand-orange">
+                      {sessionUser.name || sessionUser.username}
+                    </strong>{" "}
+                    <span className="text-slate-500 dark:text-slate-400">
+                      (@{sessionUser.username})
+                    </span>
                   </span>
                   <button
                     type="button"
@@ -525,7 +539,8 @@ function LoginForm() {
                     }}
                     className="font-bold text-brand-orange hover:underline cursor-pointer ml-2 shrink-0"
                   >
-                    Continue as {sessionUser.name || sessionUser.username} &rarr;
+                    Continue as {sessionUser.name || sessionUser.username}{" "}
+                    &rarr;
                   </button>
                 </div>
               )}
@@ -673,11 +688,6 @@ function LoginForm() {
               label: "Forgot Password?",
               href: "/forgot-password",
               colorClass: "text-brand-green hover:text-brand-green-hover",
-            },
-            {
-              label: "Admin Utility",
-              href: "/hod-reset",
-              colorClass: "text-brand-orange hover:text-brand-orange-hover",
             },
           ]}
         />

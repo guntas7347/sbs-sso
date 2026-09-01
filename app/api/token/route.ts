@@ -91,12 +91,7 @@ export async function POST(request: Request) {
       email: userData.email,
       role: userData.role,
       userId: userData.id,
-      fullName:
-        (
-          (userData.otherdata?.firstName || "") +
-          " " +
-          (userData.otherdata?.lastName || "")
-        ).trim() || userData.username,
+      fullName: userData.name || userData.username,
     };
 
     // Return the actual user data

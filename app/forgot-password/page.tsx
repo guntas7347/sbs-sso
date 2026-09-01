@@ -47,23 +47,20 @@ function ForgotPasswordContent() {
     try {
       // 1. Fetch user details from /user API (via server action)
       const res = await sarthiGetUser(userToVerify.trim());
-      if (!res.success) {
+      if (!res.success || !res.data?.user) {
         throw new Error(res.error || "User not found");
       }
 
       const user = res.data.user;
-      if (!user) {
-        throw new Error("User details not found");
-      }
 
       // 2. Match reset code
-      const expectedCode = user.resetCode || user.resetcode;
+      const expectedCode = user.resetCode;
       if (!expectedCode || expectedCode !== codeToVerify.trim()) {
         throw new Error("Invalid reset code");
       }
 
       // 3. Check expiry
-      const expiry = user.resetExpiry || user.resetexpiry;
+      const expiry = user.resetExpiry;
       if (expiry && new Date(expiry).getTime() < Date.now()) {
         throw new Error("Reset code has expired");
       }
@@ -127,8 +124,8 @@ function ForgotPasswordContent() {
 
     try {
       const totpKey = secret;
-      const originalResetCode = userData.resetCode || userData.resetcode;
-      const originalResetExpiry = userData.resetExpiry || userData.resetexpiry;
+      const originalResetCode = userData.resetCode;
+      const originalResetExpiry = userData.resetExpiry;
 
       // Call /reset-password API (via server action)
       const res = await sarthiResetPassword(

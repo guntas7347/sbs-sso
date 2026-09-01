@@ -36,14 +36,11 @@ export const handleLogin = async (
 
   try {
     const result = await sarthiGetUser(username);
-    if (!result.success) {
-      return { success: false, error: result.error };
+    if (!result.success || !result.data?.user) {
+      return { success: false, error: result.error || "Invalid username or password" };
     }
 
     const user = result.data.user;
-    if (!user) {
-      return { success: false, error: "Invalid username or password" };
-    }
 
     const correctPassword = user.password;
     if (!correctPassword) {
@@ -55,7 +52,7 @@ export const handleLogin = async (
       return { success: false, error: "Invalid username or password" };
     }
 
-    const totpKey = user.totpKey || user.totp;
+    const totpKey = user.totpKey;
     if (!totpKey) {
       return { success: false, error: "MFA is not configured for this user" };
     }
@@ -65,14 +62,7 @@ export const handleLogin = async (
       return { success: false, error: "Invalid TOTP" };
     }
 
-    const fullName =
-      (
-        (user.otherdata?.firstName || "") +
-        " " +
-        (user.otherdata?.lastName || "")
-      ).trim() ||
-      user.name ||
-      user.username;
+    const fullName = user.name || user.username;
 
     // Create 24-hour local JWT session cookie
     const sessionToken = await createSessionToken({
