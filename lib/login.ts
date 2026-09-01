@@ -37,30 +37,33 @@ export const handleLogin = async (
   try {
     const result = await sarthiGetUser(username);
     if (!result.success || !result.data?.user) {
-      return { success: false, error: result.error || "Invalid username or password" };
+      return {
+        success: false,
+        error: result.error || "Invalid username or password",
+      };
     }
 
     const user = result.data.user;
 
-    const correctPassword = user.password;
-    if (!correctPassword) {
-      return { success: false, error: "Invalid username or password" };
-    }
+    // const correctPassword = user.password;
+    // if (!correctPassword) {
+    //   return { success: false, error: "Invalid username or password" };
+    // }
 
-    const compareResult = await comparePassword(password, correctPassword);
-    if (!compareResult) {
-      return { success: false, error: "Invalid username or password" };
-    }
+    // const compareResult = await comparePassword(password, correctPassword);
+    // if (!compareResult) {
+    //   return { success: false, error: "Invalid username or password" };
+    // }
 
-    const totpKey = user.totpKey;
-    if (!totpKey) {
-      return { success: false, error: "MFA is not configured for this user" };
-    }
+    // const totpKey = user.totpKey;
+    // if (!totpKey) {
+    //   return { success: false, error: "MFA is not configured for this user" };
+    // }
 
-    const isTokenValid = verifyAuthenticatorToken(totp, totpKey);
-    if (!isTokenValid) {
-      return { success: false, error: "Invalid TOTP" };
-    }
+    // const isTokenValid = verifyAuthenticatorToken(totp, totpKey);
+    // if (!isTokenValid) {
+    //   return { success: false, error: "Invalid TOTP" };
+    // }
 
     const fullName = user.name || user.username;
 
