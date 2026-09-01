@@ -12,12 +12,24 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { sarthiGetUser } from "./sarthi";
 
+const appendCodeToUri = (uri: string, code: string) => {
+  try {
+    const url = new URL(uri);
+    url.searchParams.set("code", code);
+    return url.toString();
+  } catch {
+    return uri.includes("?") ? `${uri}&code=${code}` : `${uri}?code=${code}`;
+  }
+};
+
 export const handleLogin = async (
   username: string,
   password: string,
   totp: string,
   callbackId?: string,
   challenge?: string,
+  redirectUri?: string,
+  isUnregistered?: boolean,
 ) => {
   let redirectUrl: string | null = null;
   let userData: any = null;
@@ -80,11 +92,14 @@ export const handleLogin = async (
     const authCode = await createAuthorizationCode({
       username: user.username,
       codeChallenge: challenge,
+      isUnregistered: isUnregistered ? true : undefined,
     });
 
-    if (callbackId && clients[callbackId as ClientId]) {
-      const redirectUri = clients[callbackId as ClientId].redirectUri;
-      redirectUrl = `${redirectUri}?code=${authCode}`;
+    if (isUnregistered && redirectUri) {
+      redirectUrl = appendCodeToUri(redirectUri, authCode);
+    } else if (callbackId && clients[callbackId as ClientId]) {
+      const targetUri = clients[callbackId as ClientId].redirectUri;
+      redirectUrl = appendCodeToUri(targetUri, authCode);
     }
   } catch (error) {
     console.error("Login action error:", error);
@@ -131,6 +146,8 @@ export const getActiveSession = async () => {
 export const handleSessionLogin = async (
   callbackId?: string,
   challenge?: string,
+  redirectUri?: string,
+  isUnregistered?: boolean,
 ) => {
   let redirectUrl: string | null = null;
 
@@ -149,11 +166,14 @@ export const handleSessionLogin = async (
     const authCode = await createAuthorizationCode({
       username: payload.username as string,
       codeChallenge: challenge,
+      isUnregistered: isUnregistered ? true : undefined,
     });
 
-    if (callbackId && clients[callbackId as ClientId]) {
-      const redirectUri = clients[callbackId as ClientId].redirectUri;
-      redirectUrl = `${redirectUri}?code=${authCode}`;
+    if (isUnregistered && redirectUri) {
+      redirectUrl = appendCodeToUri(redirectUri, authCode);
+    } else if (callbackId && clients[callbackId as ClientId]) {
+      const targetUri = clients[callbackId as ClientId].redirectUri;
+      redirectUrl = appendCodeToUri(targetUri, authCode);
     }
   } catch (error) {
     console.error("Session login error:", error);

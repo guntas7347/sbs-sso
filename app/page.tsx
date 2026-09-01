@@ -31,14 +31,31 @@ function LoginForm() {
     searchParams.get("challenge") ||
     searchParams.get("code_challenge") ||
     undefined;
+  const redirectUriParam =
+    searchParams.get("redirect_uri") ||
+    searchParams.get("redirectUri") ||
+    undefined;
+  const nameParam = searchParams.get("name") || undefined;
 
-  const isValidCallback = Boolean(
+  const isRegisteredClient = Boolean(
     callBackParam && clients[callBackParam as ClientId],
+  );
+  const isUnregisteredChild = Boolean(
+    !isRegisteredClient && redirectUriParam && redirectUriParam.trim().length > 0,
   );
   const isValidChallenge = Boolean(
     challengeParam && challengeParam.trim().length > 0,
   );
-  const isValidRequest = isValidCallback && isValidChallenge;
+  const isValidRequest =
+    (isRegisteredClient || isUnregisteredChild) && isValidChallenge;
+
+  const currentClient = isRegisteredClient
+    ? clients[callBackParam as ClientId]
+    : null;
+
+  const appDisplayName: string =
+    (isRegisteredClient ? currentClient?.name : nameParam?.trim()) ||
+    "Unregistered App";
 
   // Check for active JWT session cookie on mount
   useEffect(() => {
@@ -73,7 +90,12 @@ function LoginForm() {
     setLoginError(null);
 
     try {
-      const res = await handleSessionLogin(callBackParam, challengeParam);
+      const res = await handleSessionLogin(
+        callBackParam,
+        challengeParam,
+        redirectUriParam,
+        isUnregisteredChild,
+      );
       if (!res.success) {
         throw new Error(res.error || "Session authentication failed");
       }
@@ -113,6 +135,8 @@ function LoginForm() {
         form.totp.trim(),
         callBackParam,
         challengeParam,
+        redirectUriParam,
+        isUnregisteredChild,
       );
       if (!res.success) {
         throw new Error(res.error);
@@ -257,24 +281,25 @@ function LoginForm() {
     );
   }
 
-  const currentClient =
-    callBackParam && clients[callBackParam as ClientId]
-      ? clients[callBackParam as ClientId]
-      : null;
-
   return (
     <div className="flex min-h-screen bg-slate-100 dark:bg-[#090d16] text-slate-800 dark:text-slate-100 transition-colors duration-300">
       {/* Left Column: Branding and University info - hidden on mobile, visible on lg viewports */}
       <BrandSection
-        badgeText="Official Portal Gate"
+        badgeText={isUnregisteredChild ? "External Authorization" : "Official Portal Gate"}
         titlePrefix="Connecting You to"
-        titleGradient={currentClient?.name || "Your Academic Journey"}
+        titleGradient={appDisplayName || "Your Academic Journey"}
         description={
-          currentClient?.description
+          isRegisteredClient && currentClient?.description
             ? `Sign in with your centralized credentials to access ${currentClient.name}. ${currentClient.description}.`
-            : "Sign in with your centralized credentials to securely connect to official resources, student and staff portals, research hubs, and communication networks."
+            : isUnregisteredChild
+              ? `Sign in with your centralized credentials to authorize ${appDisplayName} (Unregistered Child).`
+              : "Sign in with your centralized credentials to securely connect to official resources, student and staff portals, research hubs, and communication networks."
         }
-        statusText="All authentication gateways are fully operational"
+        statusText={
+          isUnregisteredChild
+            ? "External client gateway handshake active"
+            : "All authentication gateways are fully operational"
+        }
         securityGuideline="Never disclose your password or TOTP parameters to anyone."
       />
 
@@ -289,14 +314,14 @@ function LoginForm() {
           <SSOHeader
             title="Single Sign-On"
             description={
-              currentClient?.name
-                ? `Provide your identity parameters and multi-factor token to verify access for ${currentClient.name}.`
+              appDisplayName
+                ? `Provide your identity parameters and multi-factor token to verify access for ${appDisplayName}.`
                 : "Provide your identity parameters and multi-factor authenticator token to verify."
             }
           />
 
-          {/* Client Application Details Card */}
-          {currentClient && (
+          {/* Registered Client Application Details Card */}
+          {isRegisteredClient && currentClient && (
             <div className="p-4 rounded-2xl bg-white dark:bg-slate-900/70 border border-slate-200/80 dark:border-slate-800 shadow-sm flex items-center gap-3.5 transition-all">
               <div className="size-12 shrink-0 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/70 flex items-center justify-center overflow-hidden relative">
                 <img
@@ -325,6 +350,28 @@ function LoginForm() {
                 </h2>
                 <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
                   {currentClient.description}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Unregistered Child Application Details Card */}
+          {isUnregisteredChild && (
+            <div className="p-4 rounded-2xl bg-amber-500/5 dark:bg-amber-500/10 border border-amber-500/30 dark:border-amber-500/25 shadow-sm flex items-center gap-3.5 transition-all">
+              <div className="size-12 shrink-0 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center font-black text-sm text-amber-600 dark:text-amber-400 uppercase">
+                {appDisplayName.slice(0, 2).toUpperCase()}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300 bg-amber-500/15 px-2 py-0.5 rounded-md border border-amber-500/30">
+                    (Unregistered Child)
+                  </span>
+                </div>
+                <h2 className="text-sm font-extrabold text-slate-900 dark:text-white truncate mt-0.5">
+                  {appDisplayName}
+                </h2>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate font-mono">
+                  {redirectUriParam}
                 </p>
               </div>
             </div>
@@ -379,7 +426,7 @@ function LoginForm() {
                 <div className="border-t border-slate-100 dark:border-slate-800/80 pt-3">
                   <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
                     Click continue to instantly authorize your access
-                    {currentClient?.name ? ` to ${currentClient.name}` : ""} without re-entering credentials.
+                    {appDisplayName ? ` to ${appDisplayName}` : ""} without re-entering credentials.
                   </p>
                 </div>
               </div>

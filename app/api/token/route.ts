@@ -39,7 +39,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const { username, codeChallenge } = payload as any;
+    const { username, codeChallenge, isUnregistered } = payload as any;
     if (!username) {
       return NextResponse.json(
         { success: false, message: "Invalid token payload: username missing" },
@@ -74,6 +74,18 @@ export async function POST(request: Request) {
     }
 
     const userData = result.data.user;
+
+    // For unregistered child apps, return only username and userId
+    if (isUnregistered) {
+      return NextResponse.json({
+        success: true,
+        user: {
+          username: userData.username,
+          userId: userData.id,
+        },
+      });
+    }
+
     const userPayload = {
       username: userData.username,
       email: userData.email,

@@ -10,6 +10,7 @@ type AuthorizationCodePayload = {
   redirectUri?: string;
   state?: string;
   codeChallenge?: string;
+  isUnregistered?: boolean;
 };
 
 export const verifyJwtToken = async (
