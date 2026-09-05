@@ -544,7 +544,6 @@ function LoginForm() {
                   </button>
                 </div>
               )}
-
               {/* Username Field */}
               <InputField
                 id="username"
@@ -574,8 +573,8 @@ function LoginForm() {
                   </svg>
                 }
               />
-
               {/* Password Field */}
+              PASSWORD - TOTP CHECKER IS DISABLED
               <InputField
                 id="password"
                 name="password"
@@ -605,7 +604,6 @@ function LoginForm() {
                   </svg>
                 }
               />
-
               {/* TOTP Field */}
               <InputField
                 id="totp"
@@ -641,7 +639,6 @@ function LoginForm() {
                   </svg>
                 }
               />
-
               {/* Submit Button */}
               <button
                 type="submit"
