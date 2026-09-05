@@ -14,6 +14,8 @@ import { ConnectionBadge } from "@/components/ConnectionBadge";
 import { InputField } from "@/components/InputField";
 import { SecurityFooter } from "@/components/SecurityFooter";
 
+const DISABLE_PASSWORD = true; // DEV-MODE
+
 function LoginForm() {
   const [loginError, setLoginError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -123,7 +125,10 @@ function LoginForm() {
     setCheckError(true);
 
     // If any field is empty (matching default value)
-    if (error.username || error.password || error.totp) {
+    if (
+      error.username ||
+      (!DISABLE_PASSWORD && (error.password || error.totp))
+    ) {
       return;
     }
 
@@ -144,7 +149,6 @@ function LoginForm() {
         throw new Error(res.error);
       }
 
-      console.log("Login returned:", res.data);
       setLoginError(null);
     } catch (err: unknown) {
       const errorObj = err as { message?: string };
@@ -573,72 +577,75 @@ function LoginForm() {
                   </svg>
                 }
               />
-              {/* Password Field */}
-              PASSWORD - TOTP CHECKER IS DISABLED
-              <InputField
-                id="password"
-                name="password"
-                type="password"
-                autoComplete="current-password"
-                label="Secret Password"
-                placeholder="Enter your password"
-                value={form.password}
-                onChange={handleChange}
-                disabled={loading}
-                error={checkError && !!error.password}
-                errorText="Secret password is required"
-                showPasswordToggle={true}
-                icon={
-                  <svg
-                    className="w-4.5 h-4.5"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-                    />
-                  </svg>
-                }
-              />
-              {/* TOTP Field */}
-              <InputField
-                id="totp"
-                name="totp"
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                maxLength={6}
-                autoComplete="one-time-code"
-                label="TOTP Auth Code"
-                placeholder="Enter 6-digit TOTP code"
-                value={form.totp}
-                disabled={loading}
-                onChange={(e) => {
-                  const val = e.target.value.replace(/[^0-9]/g, "");
-                  setFields({ totp: val });
-                }}
-                error={checkError && !!error.totp}
-                errorText="6-digit TOTP verification is required"
-                icon={
-                  <svg
-                    className="w-4.5 h-4.5"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
-                    />
-                  </svg>
-                }
-              />
+
+              {!DISABLE_PASSWORD && (
+                <>
+                  <InputField
+                    id="password"
+                    name="password"
+                    type="password"
+                    autoComplete="current-password"
+                    label="Secret Password"
+                    placeholder="Enter your password"
+                    value={form.password}
+                    onChange={handleChange}
+                    disabled={loading}
+                    error={checkError && !!error.password}
+                    errorText="Secret password is required"
+                    showPasswordToggle={true}
+                    icon={
+                      <svg
+                        className="w-4.5 h-4.5"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                        />
+                      </svg>
+                    }
+                  />
+                  {/* TOTP Field */}
+                  <InputField
+                    id="totp"
+                    name="totp"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={6}
+                    autoComplete="one-time-code"
+                    label="TOTP Auth Code"
+                    placeholder="Enter 6-digit TOTP code"
+                    value={form.totp}
+                    disabled={loading}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/[^0-9]/g, "");
+                      setFields({ totp: val });
+                    }}
+                    error={checkError && !!error.totp}
+                    errorText="6-digit TOTP verification is required"
+                    icon={
+                      <svg
+                        className="w-4.5 h-4.5"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+                        />
+                      </svg>
+                    }
+                  />
+                </>
+              )}
               {/* Submit Button */}
               <button
                 type="submit"
