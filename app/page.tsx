@@ -14,7 +14,7 @@ import { ConnectionBadge } from "@/components/ConnectionBadge";
 import { InputField } from "@/components/InputField";
 import { SecurityFooter } from "@/components/SecurityFooter";
 
-const DISABLE_PASSWORD = true; // DEV-MODE
+const DISABLE_PASSWORD = false; // DEV-MODE
 
 function LoginForm() {
   const [loginError, setLoginError] = useState<string | null>(null);
