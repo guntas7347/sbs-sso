@@ -1,30 +1,54 @@
 "use client";
 
-import { useForm } from "@/hooks/useForm";
-import { handleLogin, getActiveSession, handleSessionLogin } from "@/lib/login";
+import {
+  getActiveSession,
+  handleSessionLogin,
+  redirectToSourceSSO,
+  clearSessionAction,
+  saveAuthContext,
+} from "@/lib/login";
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { clients, ClientId } from "@/lib/clients";
+
+// Lucide React Icons
+import {
+  ShieldCheck,
+  AlertTriangle,
+  AlertCircle,
+  ArrowRight,
+  ArrowLeftRight,
+  LogOut,
+  Loader2,
+  Code2,
+  ExternalLink,
+} from "lucide-react";
 
 // Shared Components
 import { BrandSection } from "@/components/BrandSection";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { SSOHeader } from "@/components/SSOHeader";
 import { ConnectionBadge } from "@/components/ConnectionBadge";
-import { InputField } from "@/components/InputField";
 import { SecurityFooter } from "@/components/SecurityFooter";
 
-const DISABLE_PASSWORD = true; // DEV-MODE
+// Dev mode toggle: set to true to display the Dev Login (/dev) test launcher button
+const dev = true;
+
+interface SessionUserData {
+  username: string;
+  name?: string;
+  user?: Record<string, unknown>;
+}
+
+const REDIRECT_MESSAGES = [
+  "Securing cryptographic session...",
+  "Initiating university gateway handshake...",
+  "Verifying identity protocol...",
+  "Redirecting to SBS authentication portal...",
+];
 
 function LoginForm() {
-  const [loginError, setLoginError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [sessionUser, setSessionUser] = useState<{
-    username: string;
-    name?: string;
-  } | null>(null);
-  const [checkingSession, setCheckingSession] = useState(true);
-  const [useManualLogin, setUseManualLogin] = useState(false);
   const searchParams = useSearchParams();
 
   const callBackParam =
@@ -38,6 +62,29 @@ function LoginForm() {
     searchParams.get("redirectUri") ||
     undefined;
   const nameParam = searchParams.get("name") || undefined;
+  const urlErrorParam = searchParams.get("error") || undefined;
+
+  const [loginError, setLoginError] = useState<string | null>(
+    urlErrorParam || null,
+  );
+  const [loading, setLoading] = useState(false);
+  const [sessionUser, setSessionUser] = useState<SessionUserData | null>(null);
+  const [checkingSession, setCheckingSession] = useState(true);
+  const [loadingMessageIndex, setLoadingMessageIndex] = useState(0);
+
+  // Cycling status messages every second when redirect/login is in progress
+  useEffect(() => {
+    if (!loading) {
+      setLoadingMessageIndex(0);
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setLoadingMessageIndex((prev) => (prev + 1) % REDIRECT_MESSAGES.length);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [loading]);
 
   const isRegisteredClient = Boolean(
     callBackParam && clients[callBackParam as ClientId],
@@ -47,11 +94,8 @@ function LoginForm() {
     redirectUriParam &&
     redirectUriParam.trim().length > 0,
   );
-  const isValidChallenge = Boolean(
-    challengeParam && challengeParam.trim().length > 0,
-  );
-  const isValidRequest =
-    (isRegisteredClient || isUnregisteredChild) && isValidChallenge;
+  // Challenge code is required for S2 (PKCE), but optional for S1 simple flow
+  const isValidRequest = isRegisteredClient || isUnregisteredChild;
 
   const currentClient = isRegisteredClient
     ? clients[callBackParam as ClientId]
@@ -70,6 +114,7 @@ function LoginForm() {
           setSessionUser({
             username: session.username,
             name: session.name || session.username,
+            user: session.user,
           });
         }
       } catch (err) {
@@ -81,13 +126,23 @@ function LoginForm() {
     checkSession();
   }, []);
 
-  // Initialize useForm with default values
-  const { form, handleChange, error, checkError, setCheckError, setFields } =
-    useForm({
-      username: "",
-      password: "",
-      totp: "",
-    });
+  // Save auth context in background if valid request
+  useEffect(() => {
+    if (isValidRequest) {
+      saveAuthContext(
+        callBackParam,
+        challengeParam,
+        redirectUriParam,
+        nameParam,
+      );
+    }
+  }, [
+    isValidRequest,
+    callBackParam,
+    challengeParam,
+    redirectUriParam,
+    nameParam,
+  ]);
 
   const handleContinueAsSession = async () => {
     setLoading(true);
@@ -111,65 +166,242 @@ function LoginForm() {
       console.error("Session login failed:", err);
       setLoginError(
         errorObj?.message ||
-          "Active session expired or invalid. Please sign in with your credentials.",
+          "Active session expired or invalid. Please sign in via the source SSO.",
       );
       setSessionUser(null);
-      setUseManualLogin(true);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setCheckError(true);
-
-    // If any field is empty (matching default value)
-    if (
-      error.username ||
-      (!DISABLE_PASSWORD && (error.password || error.totp))
-    ) {
-      return;
-    }
-
+  const handleStartSourceLogin = async () => {
     setLoading(true);
     setLoginError(null);
 
     try {
-      const res = await handleLogin(
-        form.username.trim(),
-        form.password,
-        form.totp.trim(),
+      await redirectToSourceSSO(
         callBackParam,
         challengeParam,
         redirectUriParam,
-        isUnregisteredChild,
+        nameParam,
       );
-      if (!res.success) {
-        throw new Error(res.error);
-      }
-
-      setLoginError(null);
     } catch (err: unknown) {
       const errorObj = err as { message?: string };
       if (errorObj?.message?.includes("NEXT_REDIRECT")) {
         throw err;
       }
-      console.error("Login failed:", err);
+      console.error("Failed to initiate source SSO login:", err);
       setLoginError(
         errorObj?.message ||
-          "Invalid username, password, or OTP. Please try again.",
+          "Failed to redirect to source authentication portal.",
       );
+      setLoading(false);
+    }
+  };
+
+  const handleSwitchAccount = async () => {
+    setLoading(true);
+    try {
+      await clearSessionAction();
+      setSessionUser(null);
+      await handleStartSourceLogin();
+    } catch (err: unknown) {
+      console.error("Failed to switch account:", err);
+      setLoading(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    setLoading(true);
+    try {
+      await clearSessionAction();
+      setSessionUser(null);
+    } catch (err: unknown) {
+      console.error("Failed to log out:", err);
     } finally {
       setLoading(false);
     }
   };
 
+  // Reusable loading overlay component providing immediate feedback with cycling text
+  const LoadingOverlay = () => {
+    if (!loading) return null;
+    return (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-md cursor-wait animate-[fadeIn_0.2s_ease]"
+        role="status"
+        aria-live="polite"
+      >
+        <div className="flex flex-col items-center gap-4 p-6 sm:p-8 rounded-2xl bg-white/95 dark:bg-slate-900/95 border border-slate-200/80 dark:border-slate-800 shadow-2xl max-w-sm w-full mx-4 text-center">
+          <div className="relative flex items-center justify-center size-14">
+            <div className="absolute inset-0 rounded-full border-2 border-brand-orange/20 border-t-brand-orange animate-spin" />
+            <Loader2 className="w-7 h-7 text-brand-orange animate-spin" />
+          </div>
+
+          <div className="space-y-1.5 w-full">
+            <h4 className="text-sm font-bold text-slate-900 dark:text-white">
+              Connecting to Security Gateway
+            </h4>
+            <p className="text-xs font-semibold text-brand-orange dark:text-amber-400 min-h-[1.5rem] transition-all duration-300">
+              {REDIRECT_MESSAGES[loadingMessageIndex]}
+            </p>
+          </div>
+
+          <div className="w-full bg-slate-200 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
+            <div className="h-full bg-gradient-to-r from-brand-orange to-amber-500 rounded-full animate-pulse w-full" />
+          </div>
+
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+            Please wait while the secure authorization completes...
+          </p>
+        </div>
+      </div>
+    );
+  };
+
+  // If request is missing valid callback or challenge parameters, but user HAS active session
+  if (!isValidRequest && sessionUser) {
+    return (
+      <div
+        className={`flex min-h-screen bg-slate-100 dark:bg-[#090d16] text-slate-800 dark:text-slate-100 transition-colors duration-300 ${
+          loading ? "cursor-wait" : ""
+        }`}
+      >
+        <LoadingOverlay />
+
+        <BrandSection
+          badgeText="Active SSO Session"
+          titlePrefix="Unified Gateway"
+          titleGradient="Central Identity"
+          description="Your centralized SSO session is active. You can safely access all authorized campus portals without re-authenticating."
+          statusText="SSO Session Valid (24h)"
+          securityGuideline="Always log out when using public or shared computers."
+        />
+
+        <div className="w-full lg:w-5/12 flex flex-col justify-between p-6 sm:p-12 md:p-16 relative bg-slate-50 dark:bg-[#0c1220] transition-colors duration-300">
+          <ThemeToggle />
+
+          <div className="my-auto w-full max-w-md mx-auto space-y-6 py-8">
+            <SSOHeader
+              title="Identity Verified"
+              description="Your university Single Sign-On session is currently active."
+            />
+
+            <ConnectionBadge />
+
+            {/* User Session Profile Card */}
+            <div className="p-5 rounded-2xl bg-white dark:bg-slate-900/80 border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-4">
+              <div className="flex items-center gap-3.5">
+                <div className="size-12 rounded-xl bg-gradient-to-br from-brand-orange to-brand-orange-hover text-white flex items-center justify-center font-black text-lg shadow-sm">
+                  {(sessionUser.name || sessionUser.username)
+                    .slice(0, 2)
+                    .toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
+                      Active SSO Session (24h)
+                    </span>
+                  </div>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white truncate mt-0.5">
+                    {sessionUser.name || sessionUser.username}
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                    @{sessionUser.username} • Session saved on device
+                  </p>
+                </div>
+              </div>
+
+              {/* User Data Table */}
+              {sessionUser.user && typeof sessionUser.user === "object" && (
+                <div className="border-t border-slate-100 dark:border-slate-800/80 pt-3 space-y-2">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400 block">
+                    Decrypted Payload Data
+                  </span>
+                  <div className="border border-slate-200/70 dark:border-slate-800 rounded-xl overflow-hidden text-xs">
+                    <table className="w-full text-left border-collapse">
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
+                        {Object.entries(sessionUser.user).map(([key, val]) => (
+                          <tr
+                            key={key}
+                            className="hover:bg-slate-50/50 dark:hover:bg-slate-800/20"
+                          >
+                            <td className="py-1.5 px-3 font-mono font-medium text-slate-500 dark:text-slate-400 w-1/3 text-[11px]">
+                              {key}
+                            </td>
+                            <td className="py-1.5 px-3 text-slate-800 dark:text-slate-200 font-medium text-[11px] break-all">
+                              {val === null
+                                ? "null"
+                                : typeof val === "object"
+                                  ? JSON.stringify(val)
+                                  : String(val)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              <div className="border-t border-slate-100 dark:border-slate-800/80 pt-3">
+                <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                  To sign in to a university portal, navigate to that service
+                  and click Login. Your active session will be automatically
+                  recognized.
+                </p>
+              </div>
+            </div>
+
+            {/* Logout Button */}
+            <button
+              type="button"
+              disabled={loading}
+              onClick={handleLogout}
+              className="w-full py-3 px-4 bg-slate-100 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold rounded-xl text-xs transition-colors cursor-pointer flex items-center justify-center gap-2 border border-slate-200/60 dark:border-slate-700/50"
+            >
+              <LogOut className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+              <span>Log Out SSO Session</span>
+            </button>
+
+            {/* Dev Login button when dev === true */}
+            {dev && (
+              <Link
+                href="/dev"
+                className="w-full py-3 px-4 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-500/30 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+              >
+                <Code2 className="w-4 h-4 text-amber-500" />
+                <span>Dev Login Playground (/dev)</span>
+                <ExternalLink className="w-3.5 h-3.5 ml-auto opacity-70" />
+              </Link>
+            )}
+          </div>
+
+          <SecurityFooter
+            policyType="auth"
+            links={[
+              {
+                label: "Forgot Password?",
+                href: "/forgot-password",
+                colorClass: "text-brand-green hover:text-brand-green-hover",
+              },
+            ]}
+          />
+        </div>
+      </div>
+    );
+  }
+
   // If request is missing valid callback or challenge parameters, show Invalid Sign-In Request UI
   if (!isValidRequest) {
     return (
-      <div className="flex min-h-screen bg-slate-100 dark:bg-[#090d16] text-slate-800 dark:text-slate-100 transition-colors duration-300">
-        {/* Left Column: Branding and University info */}
+      <div
+        className={`flex min-h-screen bg-slate-100 dark:bg-[#090d16] text-slate-800 dark:text-slate-100 transition-colors duration-300 ${
+          loading ? "cursor-wait" : ""
+        }`}
+      >
+        <LoadingOverlay />
+
         <BrandSection
           badgeText="Security Gateway"
           titlePrefix="Centralized Access"
@@ -179,36 +411,19 @@ function LoginForm() {
           securityGuideline="Sign-in sessions must originate from registered and verified university applications."
         />
 
-        {/* Right Column: Invalid Request Message Card */}
         <div className="w-full lg:w-5/12 flex flex-col justify-between p-6 sm:p-12 md:p-16 relative bg-slate-50 dark:bg-[#0c1220] transition-colors duration-300">
-          {/* Floating Theme Toggler */}
           <ThemeToggle />
 
-          {/* Invalid Request Container */}
           <div className="my-auto w-full max-w-md mx-auto space-y-6 py-8">
-            {/* Logo & Heading */}
             <SSOHeader
               title="Invalid Sign-In Request"
               description="Authentication handshake could not be established."
             />
 
-            {/* Warning Message Card */}
             <div className="p-6 rounded-2xl bg-amber-500/10 dark:bg-amber-500/10 border border-amber-500/25 dark:border-amber-500/20 backdrop-blur-sm space-y-4 animate-[fadeIn_0.3s_ease]">
               <div className="flex items-start gap-3.5">
                 <div className="p-2.5 rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5">
-                  <svg
-                    className="w-6 h-6"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                    />
-                  </svg>
+                  <AlertTriangle className="w-6 h-6 text-amber-600 dark:text-amber-400" />
                 </div>
                 <div className="space-y-1">
                   <h2 className="text-base font-bold text-slate-900 dark:text-white">
@@ -216,7 +431,7 @@ function LoginForm() {
                   </h2>
                   <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed font-medium">
                     This sign-in page was opened without a valid application
-                    request.
+                    request or challenge code.
                   </p>
                 </div>
               </div>
@@ -229,43 +444,41 @@ function LoginForm() {
               </div>
             </div>
 
-            {/* Action Buttons */}
+            {/* Direct Login Option */}
             <div className="space-y-2.5 pt-1">
               <button
                 type="button"
-                onClick={() => {
-                  if (typeof window !== "undefined") {
-                    window.close();
-                    setTimeout(() => {
-                      if (!window.closed) {
-                        alert(
-                          "Please close this browser tab or window to return to your application.",
-                        );
-                      }
-                    }, 250);
-                  }
-                }}
+                onClick={handleStartSourceLogin}
+                disabled={loading}
                 className="w-full py-3.5 px-6 bg-gradient-to-r from-brand-orange to-brand-orange-hover hover:from-brand-orange-hover hover:to-brand-orange text-white font-bold rounded-xl shadow-md hover:shadow-lg hover:shadow-brand-orange/10 transform hover:-translate-y-[1px] active:translate-y-0 active:scale-[0.99] transition-all duration-150 cursor-pointer text-center text-sm tracking-wide flex items-center justify-center gap-2"
               >
-                <svg
-                  className="w-4 h-4"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={2.5}
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
-                Close Webpage
+                {loading ? (
+                  <>
+                    <Loader2 className="animate-spin w-4 h-4 text-white" />
+                    <span>{REDIRECT_MESSAGES[loadingMessageIndex]}</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Direct Sign In via SBS Exam</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
               </button>
+
+              {/* Dev Login button when dev === true */}
+              {dev && (
+                <Link
+                  href="/dev"
+                  className="w-full py-3 px-4 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-500/30 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+                >
+                  <Code2 className="w-4 h-4 text-amber-500" />
+                  <span>Dev Login Playground (/dev)</span>
+                  <ExternalLink className="w-3.5 h-3.5 ml-auto opacity-70" />
+                </Link>
+              )}
             </div>
           </div>
 
-          {/* Warning Policy / Help link footer */}
           <SecurityFooter
             policyType="auth"
             links={[
@@ -282,8 +495,14 @@ function LoginForm() {
   }
 
   return (
-    <div className="flex min-h-screen bg-slate-100 dark:bg-[#090d16] text-slate-800 dark:text-slate-100 transition-colors duration-300">
-      {/* Left Column: Branding and University info - hidden on mobile, visible on lg viewports */}
+    <div
+      className={`flex min-h-screen bg-slate-100 dark:bg-[#090d16] text-slate-800 dark:text-slate-100 transition-colors duration-300 ${
+        loading ? "cursor-wait" : ""
+      }`}
+    >
+      <LoadingOverlay />
+
+      {/* Left Column: Branding and University info */}
       <BrandSection
         badgeText={
           isUnregisteredChild
@@ -304,23 +523,20 @@ function LoginForm() {
             ? "External client gateway handshake active"
             : "All authentication gateways are fully operational"
         }
-        securityGuideline="Never disclose your password or TOTP parameters to anyone."
+        securityGuideline="Never disclose your university credentials to anyone."
       />
 
-      {/* Right Column: Login Card & Form */}
+      {/* Right Column: SSO Connection Card */}
       <div className="w-full lg:w-5/12 flex flex-col justify-between p-6 sm:p-12 md:p-16 relative bg-slate-50 dark:bg-[#0c1220] transition-colors duration-300">
-        {/* Floating Theme Toggler */}
         <ThemeToggle />
 
-        {/* Login form container */}
         <div className="my-auto w-full max-w-md mx-auto space-y-6 py-8">
-          {/* Logo & Heading */}
           <SSOHeader
             title="Single Sign-On"
             description={
               appDisplayName
-                ? `Provide your identity parameters and multi-factor token to verify access for ${appDisplayName}.`
-                : "Provide your identity parameters and multi-factor authenticator token to verify."
+                ? `Authenticate via University Portal to access ${appDisplayName}.`
+                : "Authenticate via University Portal."
             }
           />
 
@@ -381,31 +597,19 @@ function LoginForm() {
             </div>
           )}
 
-          {/* Secure Connection established badge */}
+          {/* Secure Connection Badge */}
           <ConnectionBadge />
 
-          {/* Alert Message for validation / login errors */}
+          {/* Alert Message for errors */}
           {loginError && (
             <div className="p-4 rounded-xl bg-rose-50 dark:bg-rose-950/20 border border-rose-250 dark:border-rose-900/50 flex items-start gap-3 text-rose-700 dark:text-rose-455 text-sm animate-[shake_0.4s_ease-in-out]">
-              <svg
-                className="w-5 h-5 shrink-0 mt-0.5 text-rose-500"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                />
-              </svg>
+              <AlertCircle className="w-5 h-5 shrink-0 mt-0.5 text-rose-500" />
               <span>{loginError}</span>
             </div>
           )}
 
           {/* Active Session Fast SSO Card */}
-          {sessionUser && !useManualLogin ? (
+          {sessionUser ? (
             <div className="space-y-5 animate-[fadeIn_0.3s_ease]">
               <div className="p-5 rounded-2xl bg-white dark:bg-slate-900/80 border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-4">
                 <div className="flex items-center gap-3.5">
@@ -424,16 +628,54 @@ function LoginForm() {
                       {sessionUser.name || sessionUser.username}
                     </h3>
                     <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
-                      @{sessionUser.username} • Session active on this device
+                      @{sessionUser.username} • Identity Verified
                     </p>
                   </div>
                 </div>
 
+                {/* Returned Data Table in Frontend */}
+                {sessionUser.user && typeof sessionUser.user === "object" && (
+                  <div className="border-t border-slate-100 dark:border-slate-800/80 pt-3 space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide text-[11px]">
+                        Returned User Data
+                      </span>
+                      <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded">
+                        {Object.keys(sessionUser.user).length} attributes
+                      </span>
+                    </div>
+                    <div className="border border-slate-200/70 dark:border-slate-800 rounded-xl overflow-hidden bg-slate-50/50 dark:bg-slate-950/40 text-xs">
+                      <table className="w-full text-left border-collapse">
+                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
+                          {Object.entries(sessionUser.user).map(
+                            ([key, val]) => (
+                              <tr
+                                key={key}
+                                className="hover:bg-slate-100/50 dark:hover:bg-slate-800/30"
+                              >
+                                <td className="py-2 px-3 font-mono font-medium text-slate-600 dark:text-slate-400 w-1/3 text-[11px]">
+                                  {key}
+                                </td>
+                                <td className="py-2 px-3 text-slate-900 dark:text-slate-100 font-medium text-[11px] break-all">
+                                  {val === null
+                                    ? "null"
+                                    : typeof val === "object"
+                                      ? JSON.stringify(val)
+                                      : String(val)}
+                                </td>
+                              </tr>
+                            ),
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
                 <div className="border-t border-slate-100 dark:border-slate-800/80 pt-3">
                   <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                    Click continue to instantly authorize your access
-                    {appDisplayName ? ` to ${appDisplayName}` : ""} without
-                    re-entering credentials.
+                    Click continue to authorize and pass your verified identity
+                    data to <strong>{appDisplayName}</strong>.
                   </p>
                 </div>
               </div>
@@ -448,46 +690,15 @@ function LoginForm() {
                 >
                   {loading ? (
                     <>
-                      <svg
-                        className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
-                        xmlns="http://www.w3.org/2000/svg"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                      >
-                        <circle
-                          className="opacity-25"
-                          cx="12"
-                          cy="12"
-                          r="10"
-                          stroke="currentColor"
-                          strokeWidth="4"
-                        />
-                        <path
-                          className="opacity-75"
-                          fill="currentColor"
-                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                        />
-                      </svg>
-                      <span>Authorizing Access...</span>
+                      <Loader2 className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" />
+                      <span>{REDIRECT_MESSAGES[loadingMessageIndex]}</span>
                     </>
                   ) : (
                     <>
                       <span>
                         Continue as {sessionUser.name || sessionUser.username}
                       </span>
-                      <svg
-                        className="w-4 h-4"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        strokeWidth={2.5}
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"
-                        />
-                      </svg>
+                      <ArrowRight className="w-4 h-4" />
                     </>
                   )}
                 </button>
@@ -495,196 +706,93 @@ function LoginForm() {
                 <button
                   type="button"
                   disabled={loading}
-                  onClick={() => {
-                    setLoginError(null);
-                    setUseManualLogin(true);
-                  }}
+                  onClick={handleSwitchAccount}
                   className="w-full py-3 px-4 bg-slate-100 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold rounded-xl text-xs transition-colors cursor-pointer flex items-center justify-center gap-2 border border-slate-200/60 dark:border-slate-700/50"
                 >
-                  <svg
-                    className="w-4 h-4 text-slate-500 dark:text-slate-400"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5"
-                    />
-                  </svg>
-                  <span>Use a different account</span>
+                  <ArrowLeftRight className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+                  <span>Sign in with a different account</span>
                 </button>
+
+                {/* Dev Login button when dev === true */}
+                {dev && (
+                  <Link
+                    href="/dev"
+                    className="w-full py-3 px-4 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-500/30 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+                  >
+                    <Code2 className="w-4 h-4 text-amber-500" />
+                    <span>Dev Login Playground (/dev)</span>
+                    <ExternalLink className="w-3.5 h-3.5 ml-auto opacity-70" />
+                  </Link>
+                )}
               </div>
             </div>
           ) : (
-            /* Manual Form */
-            <form
-              onSubmit={handleSubmit}
-              className="space-y-5 animate-[fadeIn_0.3s_ease]"
-            >
-              {sessionUser && (
-                <div className="flex items-center justify-between p-3 rounded-xl bg-brand-orange/10 border border-brand-orange/20 text-xs">
-                  <span className="text-slate-700 dark:text-slate-300 truncate">
-                    Saved session:{" "}
-                    <strong className="text-brand-orange">
-                      {sessionUser.name || sessionUser.username}
-                    </strong>{" "}
-                    <span className="text-slate-500 dark:text-slate-400">
-                      (@{sessionUser.username})
-                    </span>
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setLoginError(null);
-                      setUseManualLogin(false);
-                    }}
-                    className="font-bold text-brand-orange hover:underline cursor-pointer ml-2 shrink-0"
-                  >
-                    Continue as {sessionUser.name || sessionUser.username}{" "}
-                    &rarr;
-                  </button>
+            /* Source SSO Portal Gateway Card */
+            <div className="space-y-5 animate-[fadeIn_0.3s_ease]">
+              <div className="p-6 rounded-2xl bg-white dark:bg-slate-900/80 border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-4">
+                <div className="flex items-start gap-4">
+                  <div className="size-12 rounded-xl bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                    <ShieldCheck className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
+                  </div>
+                  <div className="space-y-1">
+                    <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                      University Central Login
+                    </h3>
+                    <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                      Authentication is completed securely on the University
+                      Exam Portal (<strong>sbsexam.edu.in</strong>). You will be
+                      returned here automatically upon successful sign-in.
+                    </p>
+                  </div>
                 </div>
-              )}
-              {/* Username Field */}
-              <InputField
-                id="username"
-                name="username"
-                type="text"
-                autoComplete="username"
-                label="University Username"
-                placeholder="Enter your username"
-                value={form.username}
-                onChange={handleChange}
-                disabled={loading}
-                error={checkError && !!error.username}
-                errorText="Username credentials are required"
-                icon={
-                  <svg
-                    className="w-4.5 h-4.5"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-                    />
-                  </svg>
-                }
-              />
 
-              {!DISABLE_PASSWORD && (
-                <>
-                  <InputField
-                    id="password"
-                    name="password"
-                    type="password"
-                    autoComplete="current-password"
-                    label="Secret Password"
-                    placeholder="Enter your password"
-                    value={form.password}
-                    onChange={handleChange}
-                    disabled={loading}
-                    error={checkError && !!error.password}
-                    errorText="Secret password is required"
-                    showPasswordToggle={true}
-                    icon={
-                      <svg
-                        className="w-4.5 h-4.5"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        strokeWidth={2}
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-                        />
-                      </svg>
-                    }
-                  />
-                  {/* TOTP Field */}
-                  <InputField
-                    id="totp"
-                    name="totp"
-                    type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    maxLength={6}
-                    autoComplete="one-time-code"
-                    label="TOTP Auth Code"
-                    placeholder="Enter 6-digit TOTP code"
-                    value={form.totp}
-                    disabled={loading}
-                    onChange={(e) => {
-                      const val = e.target.value.replace(/[^0-9]/g, "");
-                      setFields({ totp: val });
-                    }}
-                    error={checkError && !!error.totp}
-                    errorText="6-digit TOTP verification is required"
-                    icon={
-                      <svg
-                        className="w-4.5 h-4.5"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        strokeWidth={2}
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
-                        />
-                      </svg>
-                    }
-                  />
-                </>
-              )}
-              {/* Submit Button */}
+                <div className="border-t border-slate-100 dark:border-slate-800/80 pt-3 text-xs text-slate-500 dark:text-slate-400 space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="size-1.5 rounded-full bg-emerald-500" />
+                    <span>Origin-verified AES-256-GCM encrypted transfer</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="size-1.5 rounded-full bg-emerald-500" />
+                    <span>Single Sign-On session valid for 24 hours</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Login Button redirecting to Source SSO */}
               <button
-                type="submit"
-                disabled={loading}
-                className="w-full py-3.5 px-6 bg-gradient-to-r from-brand-orange to-brand-orange-hover hover:from-brand-orange-hover hover:to-brand-orange text-white font-bold rounded-xl shadow-md hover:shadow-lg hover:shadow-brand-orange/10 transform hover:-translate-y-[1px] active:translate-y-0 active:scale-[0.99] transition-all duration-150 cursor-pointer disabled:opacity-75 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-2 text-center text-sm tracking-wide mt-2"
+                type="button"
+                onClick={handleStartSourceLogin}
+                disabled={loading || checkingSession}
+                className="w-full py-4 px-6 bg-gradient-to-r from-brand-orange via-amber-500 to-brand-orange-hover hover:from-brand-orange-hover hover:to-brand-orange text-white font-extrabold rounded-xl shadow-md hover:shadow-lg hover:shadow-brand-orange/15 transform hover:-translate-y-[1px] active:translate-y-0 active:scale-[0.99] transition-all duration-150 cursor-pointer disabled:opacity-75 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-2.5 text-center text-sm tracking-wide"
               >
                 {loading ? (
                   <>
-                    <svg
-                      className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
-                      xmlns="http://www.w3.org/2000/svg"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                    >
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                      />
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                      />
-                    </svg>
-                    <span>Authenticating...</span>
+                    <Loader2 className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" />
+                    <span>{REDIRECT_MESSAGES[loadingMessageIndex]}</span>
                   </>
                 ) : (
-                  "Secure Authenticate"
+                  <>
+                    <span>Sign In via SBS Exam Portal</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </>
                 )}
               </button>
-            </form>
+
+              {/* Dev Login button when dev === true */}
+              {dev && (
+                <Link
+                  href="/dev"
+                  className="w-full py-3 px-4 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-500/30 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+                >
+                  <Code2 className="w-4 h-4 text-amber-500" />
+                  <span>Dev Login Playground (/dev)</span>
+                  <ExternalLink className="w-3.5 h-3.5 ml-auto opacity-70" />
+                </Link>
+              )}
+            </div>
           )}
         </div>
 
-        {/* Warning Policy / Help link footer */}
         <SecurityFooter
           policyType="auth"
           links={[

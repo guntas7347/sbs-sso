@@ -8,11 +8,11 @@ export type Client = {
 };
 
 export const clients = {
-  sarthi: {
-    name: "Sarthi",
-    description: "Student services and academic management",
-    logo: "/clients/sarthi.png",
-    redirectUri: "https://sarthi.example.com/auth/callback",
+  "sbs-form": {
+    name: "SBS FORM",
+    description: "Google FORM like interface for students",
+    logo: "/clients/grievance.png",
+    redirectUri: "http://localhost:3001/api/auth/callback",
   },
   grievance: {
     name: "SBS Service Portal",

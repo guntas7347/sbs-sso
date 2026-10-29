@@ -1,13 +1,11 @@
 "use server";
 
-import { comparePassword } from "./bycrypt";
 import {
   createAuthorizationCode,
   createSessionToken,
   verifyJwtToken,
 } from "./jwt";
 import { clients, ClientId } from "./clients";
-import { verifyAuthenticatorToken } from "./totp";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { sarthiGetUser } from "./sarthi";
@@ -24,53 +22,34 @@ const appendCodeToUri = (uri: string, code: string) => {
 
 export const handleLogin = async (
   username: string,
-  password: string,
-  totp: string,
+  password?: string,
+  totp?: string,
   callbackId?: string,
   challenge?: string,
   redirectUri?: string,
   isUnregistered?: boolean,
 ) => {
   let redirectUrl: string | null = null;
-  let userData: any = null;
+  let userData: Record<string, unknown> | null = null;
 
   try {
     const result = await sarthiGetUser(username);
     if (!result.success || !result.data?.user) {
       return {
         success: false,
-        error: result.error || "Invalid username or password",
+        error: result.error || "Invalid username or user not found",
       };
     }
 
     const user = result.data.user;
-
-    // const correctPassword = user.password;
-    // if (!correctPassword) {
-    //   return { success: false, error: "Invalid username or password" };
-    // }
-
-    // const compareResult = await comparePassword(password, correctPassword);
-    // if (!compareResult) {
-    //   return { success: false, error: "Invalid username or password" };
-    // }
-
-    // const totpKey = user.totpKey;
-    // if (!totpKey) {
-    //   return { success: false, error: "MFA is not configured for this user" };
-    // }
-
-    // const isTokenValid = verifyAuthenticatorToken(totp, totpKey);
-    // if (!isTokenValid) {
-    //   return { success: false, error: "Invalid TOTP" };
-    // }
-
     const fullName = user.name || user.username;
+    userData = user as unknown as Record<string, unknown>;
 
     // Create 24-hour local JWT session cookie
     const sessionToken = await createSessionToken({
       username: user.username,
       name: fullName,
+      user: userData,
     });
 
     const cookieStore = await cookies();
@@ -86,6 +65,7 @@ export const handleLogin = async (
       username: user.username,
       codeChallenge: challenge,
       isUnregistered: isUnregistered ? true : undefined,
+      user: userData,
     });
 
     if (isUnregistered && redirectUri) {
@@ -125,10 +105,19 @@ export const getActiveSession = async () => {
       return { success: false };
     }
 
+    const userPayload =
+      (payload.user as Record<string, unknown>) ||
+      Object.fromEntries(
+        Object.entries(payload).filter(
+          ([k]) => !["iat", "exp", "nbf", "jti"].includes(k),
+        ),
+      );
+
     return {
       success: true,
       username: payload.username as string,
       name: (payload.name as string) || (payload.username as string),
+      user: userPayload,
     };
   } catch (error) {
     console.error("Get active session error:", error);
@@ -156,10 +145,19 @@ export const handleSessionLogin = async (
       return { success: false, error: "Session has expired or is invalid" };
     }
 
+    const userPayload =
+      (payload.user as Record<string, unknown>) ||
+      Object.fromEntries(
+        Object.entries(payload).filter(
+          ([k]) => !["iat", "exp", "nbf", "jti"].includes(k),
+        ),
+      );
+
     const authCode = await createAuthorizationCode({
       username: payload.username as string,
       codeChallenge: challenge,
       isUnregistered: isUnregistered ? true : undefined,
+      user: userPayload,
     });
 
     if (isUnregistered && redirectUri) {
@@ -185,10 +183,61 @@ export const handleSessionLogin = async (
   };
 };
 
+export const saveAuthContext = async (
+  callBack?: string,
+  challenge?: string,
+  redirectUri?: string,
+  name?: string,
+) => {
+  try {
+    const cookieStore = await cookies();
+    cookieStore.set(
+      "sso_auth_context",
+      JSON.stringify({ callBack, challenge, redirectUri, name }),
+      {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        path: "/",
+        maxAge: 30 * 60, // 30 minutes
+      },
+    );
+    return { success: true };
+  } catch (error) {
+    console.error("Failed to save auth context:", error);
+    return { success: false };
+  }
+};
+
+export const redirectToSourceSSO = async (
+  callBack?: string,
+  challenge?: string,
+  redirectUri?: string,
+  name?: string,
+) => {
+  const cookieStore = await cookies();
+  cookieStore.set(
+    "sso_auth_context",
+    JSON.stringify({ callBack, challenge, redirectUri, name }),
+    {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 30 * 60, // 30 minutes
+    },
+  );
+
+  const sourceUrl =
+    process.env.SOURCE_SSO_LOGIN_URL || "https://sbsexam.edu.in/user-login";
+  redirect(sourceUrl);
+};
+
 export const clearSessionAction = async () => {
   try {
     const cookieStore = await cookies();
     cookieStore.delete("sso_session");
+    cookieStore.delete("sso_auth_context");
     return { success: true };
   } catch (error) {
     console.error("Clear session error:", error);
