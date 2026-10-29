@@ -43,6 +43,6 @@ export const createSessionToken = async (
   payload: SessionTokenPayload,
 ): Promise<string> => {
   return jwt.sign(payload, JWT_SECRET, {
-    expiresIn: "24h",
+    expiresIn: "30d", // 1 month
   });
 };

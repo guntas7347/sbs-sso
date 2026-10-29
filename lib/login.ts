@@ -45,7 +45,7 @@ export const handleLogin = async (
     const fullName = user.name || user.username;
     userData = user as unknown as Record<string, unknown>;
 
-    // Create 24-hour local JWT session cookie
+    // Create 1-month (30-day) local JWT session cookie
     const sessionToken = await createSessionToken({
       username: user.username,
       name: fullName,
@@ -58,7 +58,7 @@ export const handleLogin = async (
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       path: "/",
-      maxAge: 24 * 60 * 60, // 24 hours
+      maxAge: 30 * 24 * 60 * 60, // 30 days (1 month)
     });
 
     const authCode = await createAuthorizationCode({

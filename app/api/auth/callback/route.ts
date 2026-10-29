@@ -150,16 +150,17 @@ async function handleCallback(req: NextRequest, dataString: string | null) {
     if (challenge) targetUrl.searchParams.set("challenge", challenge);
     if (redirectUri) targetUrl.searchParams.set("redirect_uri", redirectUri);
     if (nameParam) targetUrl.searchParams.set("name", nameParam);
+    targetUrl.searchParams.set("from_callback", "true");
 
     const response = NextResponse.redirect(targetUrl);
 
-    // Persist 24-hour SSO session cookie
+    // Persist 1-month (30-day) SSO session cookie
     response.cookies.set("sso_session", sessionToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       path: "/",
-      maxAge: 24 * 60 * 60, // 24 hours
+      maxAge: 30 * 24 * 60 * 60, // 30 days (1 month)
     });
 
     // Clear the temporary context cookie

@@ -7,12 +7,12 @@ import {
   clearSessionAction,
   saveAuthContext,
 } from "@/lib/login";
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { clients, ClientId } from "@/lib/clients";
 
-// Lucide React Icons
+// Lucide React Icons only - No SVG
 import {
   ShieldCheck,
   AlertTriangle,
@@ -32,8 +32,8 @@ import { SSOHeader } from "@/components/SSOHeader";
 import { ConnectionBadge } from "@/components/ConnectionBadge";
 import { SecurityFooter } from "@/components/SecurityFooter";
 
-// Dev mode toggle: set to true to display the Dev Login (/dev) test launcher button
-const dev = true;
+// Dev mode toggle: set to true to display the full payload box instead of the 4-field preview, and enable Dev Login button
+const dev = false;
 
 interface SessionUserData {
   username: string;
@@ -45,8 +45,162 @@ const REDIRECT_MESSAGES = [
   "Securing cryptographic session...",
   "Initiating university gateway handshake...",
   "Verifying identity protocol...",
-  "Redirecting to SBS authentication portal...",
+  "Redirecting to authorized application...",
 ];
+
+function SessionProfileCard({
+  sessionUser,
+  devMode,
+  showNotice = true,
+  appDisplayName,
+}: {
+  sessionUser: SessionUserData;
+  devMode: boolean;
+  showNotice?: boolean;
+  appDisplayName?: string;
+}) {
+  const [imgSrc, setImgSrc] = useState<string>(
+    (sessionUser.user?.PhotoUrl as string) ||
+      (sessionUser.user?.photoUrl as string) ||
+      (sessionUser.user?.photo_url as string) ||
+      (sessionUser.user?.avatar as string) ||
+      (sessionUser.user?.image as string) ||
+      "/avatar-placeholder.svg",
+  );
+
+  const previewFields = [
+    {
+      label: "Name",
+      value:
+        `${sessionUser.user?.fullname as string} (${sessionUser.user?.username as string})` ||
+        (sessionUser.name as string) ||
+        sessionUser.username,
+    },
+
+    {
+      label: "Role",
+      value:
+        (sessionUser.user?.Role as string) ||
+        (sessionUser.user?.role as string) ||
+        "user",
+    },
+    {
+      label: "Email",
+      value:
+        (sessionUser.user?.email as string) ||
+        (sessionUser.user?.Email as string) ||
+        "Not provided",
+    },
+  ];
+
+  return (
+    <div className="p-5 rounded-2xl bg-white dark:bg-slate-900/80 border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-4">
+      <div className="flex items-center gap-3.5">
+        <div className="size-14 rounded-2xl bg-slate-100 dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80 overflow-hidden shrink-0 relative flex items-center justify-center shadow-sm">
+          <img
+            src={imgSrc}
+            alt={sessionUser.name || sessionUser.username}
+            className="size-full object-cover"
+            onError={() => setImgSrc("/avatar-placeholder.svg")}
+          />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
+              Active SSO Session (30 Days)
+            </span>
+          </div>
+          <h3 className="text-base font-bold text-slate-900 dark:text-white truncate mt-0.5">
+            {sessionUser.name || sessionUser.username}
+          </h3>
+          <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+            @{sessionUser.username} • Identity Verified
+          </p>
+        </div>
+      </div>
+
+      {sessionUser.user && typeof sessionUser.user === "object" && (
+        <div className="border-t border-slate-100 dark:border-slate-800/80 pt-3 space-y-2">
+          <div className="flex items-center justify-between text-xs">
+            <span className="font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide text-[11px]">
+              {devMode
+                ? "Full Decrypted Payload (Dev Mode)"
+                : "User Identity Preview"}
+            </span>
+            {devMode && (
+              <span className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                {Object.keys(sessionUser.user).length} attributes
+              </span>
+            )}
+          </div>
+
+          {devMode ? (
+            /* Full payload box when dev === true */
+            <div className="border border-slate-200/70 dark:border-slate-800 rounded-xl overflow-hidden bg-slate-50/50 dark:bg-slate-950/40 text-xs max-h-64 overflow-y-auto">
+              <table className="w-full text-left border-collapse">
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
+                  {Object.entries(sessionUser.user).map(([key, val]) => (
+                    <tr
+                      key={key}
+                      className="hover:bg-slate-100/50 dark:hover:bg-slate-800/30"
+                    >
+                      <td className="py-1.5 px-3 font-mono font-medium text-slate-500 dark:text-slate-400 w-1/3 text-[11px]">
+                        {key}
+                      </td>
+                      <td className="py-1.5 px-3 text-slate-900 dark:text-slate-100 font-mono text-[11px] break-all">
+                        {val === null
+                          ? "null"
+                          : typeof val === "object"
+                            ? JSON.stringify(val)
+                            : String(val)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            /* Only show Name, username, role, email in preview when dev === false */
+            <div className="border border-slate-200/70 dark:border-slate-800 rounded-xl overflow-hidden bg-slate-50/50 dark:bg-slate-950/40 text-xs">
+              <table className="w-full text-left border-collapse">
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
+                  {previewFields.map((field) => (
+                    <tr
+                      key={field.label}
+                      className="hover:bg-slate-100/50 dark:hover:bg-slate-800/30"
+                    >
+                      <td className="py-2 px-3 font-mono font-medium text-slate-500 dark:text-slate-400 w-1/3 text-[11px]">
+                        {field.label}
+                      </td>
+                      <td className="py-2 px-3 text-slate-900 dark:text-slate-100 font-semibold text-[11px] break-all">
+                        {field.value}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {showNotice && (
+        <div className="border-t border-slate-100 dark:border-slate-800/80 pt-3">
+          <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+            {appDisplayName ? (
+              <>
+                Click continue to authorize and pass your verified identity data
+                to <strong>{appDisplayName}</strong>.
+              </>
+            ) : (
+              "To sign in to a university portal, navigate to that service and click Login. Your active session will be automatically recognized."
+            )}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function LoginForm() {
   const searchParams = useSearchParams();
@@ -63,14 +217,20 @@ function LoginForm() {
     undefined;
   const nameParam = searchParams.get("name") || undefined;
   const urlErrorParam = searchParams.get("error") || undefined;
+  const fromCallbackParam =
+    searchParams.get("from_callback") === "true" ||
+    searchParams.get("from_callback") === "1";
 
   const [loginError, setLoginError] = useState<string | null>(
     urlErrorParam || null,
   );
   const [loading, setLoading] = useState(false);
+
   const [sessionUser, setSessionUser] = useState<SessionUserData | null>(null);
   const [checkingSession, setCheckingSession] = useState(true);
   const [loadingMessageIndex, setLoadingMessageIndex] = useState(0);
+
+  const hasAutoTriggeredRef = useRef(false);
 
   // Cycling status messages every second when redirect/login is in progress
   useEffect(() => {
@@ -174,6 +334,21 @@ function LoginForm() {
     }
   };
 
+  // Auto trigger login if redirected from /api/auth/callback
+  useEffect(() => {
+    if (
+      fromCallbackParam &&
+      isValidRequest &&
+      sessionUser &&
+      !hasAutoTriggeredRef.current &&
+      !loading &&
+      !loginError
+    ) {
+      hasAutoTriggeredRef.current = true;
+      handleContinueAsSession();
+    }
+  }, [fromCallbackParam, isValidRequest, sessionUser, loading, loginError]);
+
   const handleStartSourceLogin = async () => {
     setLoading(true);
     setLoginError(null);
@@ -259,6 +434,40 @@ function LoginForm() {
     );
   };
 
+  if (checkingSession) {
+    return (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-md cursor-wait animate-[fadeIn_0.2s_ease]"
+        role="status"
+        aria-live="polite"
+      >
+        <div className="flex flex-col items-center gap-4 p-6 sm:p-8 rounded-2xl bg-white/95 dark:bg-slate-900/95 border border-slate-200/80 dark:border-slate-800 shadow-2xl max-w-sm w-full mx-4 text-center">
+          <div className="relative flex items-center justify-center size-14">
+            <div className="absolute inset-0 rounded-full border-2 border-brand-orange/20 border-t-brand-orange animate-spin" />
+            <Loader2 className="w-7 h-7 text-brand-orange animate-spin" />
+          </div>
+
+          <div className="space-y-1.5 w-full">
+            <h4 className="text-sm font-bold text-slate-900 dark:text-white">
+              Connecting to Security Gateway
+            </h4>
+            <p className="text-xs font-semibold text-brand-orange dark:text-amber-400 min-h-[1.5rem] transition-all duration-300">
+              {REDIRECT_MESSAGES[loadingMessageIndex]}
+            </p>
+          </div>
+
+          <div className="w-full bg-slate-200 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
+            <div className="h-full bg-gradient-to-r from-brand-orange to-amber-500 rounded-full animate-pulse w-full" />
+          </div>
+
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+            Please wait while the secure authorization completes...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   // If request is missing valid callback or challenge parameters, but user HAS active session
   if (!isValidRequest && sessionUser) {
     return (
@@ -270,11 +479,11 @@ function LoginForm() {
         <LoadingOverlay />
 
         <BrandSection
-          badgeText="Active SSO Session"
+          badgeText="Active SSO Session (30 Days)"
           titlePrefix="Unified Gateway"
           titleGradient="Central Identity"
           description="Your centralized SSO session is active. You can safely access all authorized campus portals without re-authenticating."
-          statusText="SSO Session Valid (24h)"
+          statusText="SSO Session Valid (30 Days)"
           securityGuideline="Always log out when using public or shared computers."
         />
 
@@ -289,69 +498,12 @@ function LoginForm() {
 
             <ConnectionBadge />
 
-            {/* User Session Profile Card */}
-            <div className="p-5 rounded-2xl bg-white dark:bg-slate-900/80 border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-4">
-              <div className="flex items-center gap-3.5">
-                <div className="size-12 rounded-xl bg-gradient-to-br from-brand-orange to-brand-orange-hover text-white flex items-center justify-center font-black text-lg shadow-sm">
-                  {(sessionUser.name || sessionUser.username)
-                    .slice(0, 2)
-                    .toUpperCase()}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
-                      Active SSO Session (24h)
-                    </span>
-                  </div>
-                  <h3 className="text-base font-bold text-slate-900 dark:text-white truncate mt-0.5">
-                    {sessionUser.name || sessionUser.username}
-                  </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
-                    @{sessionUser.username} • Session saved on device
-                  </p>
-                </div>
-              </div>
-
-              {/* User Data Table */}
-              {sessionUser.user && typeof sessionUser.user === "object" && (
-                <div className="border-t border-slate-100 dark:border-slate-800/80 pt-3 space-y-2">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400 block">
-                    Decrypted Payload Data
-                  </span>
-                  <div className="border border-slate-200/70 dark:border-slate-800 rounded-xl overflow-hidden text-xs">
-                    <table className="w-full text-left border-collapse">
-                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
-                        {Object.entries(sessionUser.user).map(([key, val]) => (
-                          <tr
-                            key={key}
-                            className="hover:bg-slate-50/50 dark:hover:bg-slate-800/20"
-                          >
-                            <td className="py-1.5 px-3 font-mono font-medium text-slate-500 dark:text-slate-400 w-1/3 text-[11px]">
-                              {key}
-                            </td>
-                            <td className="py-1.5 px-3 text-slate-800 dark:text-slate-200 font-medium text-[11px] break-all">
-                              {val === null
-                                ? "null"
-                                : typeof val === "object"
-                                  ? JSON.stringify(val)
-                                  : String(val)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-
-              <div className="border-t border-slate-100 dark:border-slate-800/80 pt-3">
-                <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                  To sign in to a university portal, navigate to that service
-                  and click Login. Your active session will be automatically
-                  recognized.
-                </p>
-              </div>
-            </div>
+            {/* User Session Profile Card with Image & Preview */}
+            <SessionProfileCard
+              sessionUser={sessionUser}
+              devMode={dev}
+              showNotice={true}
+            />
 
             {/* Logout Button */}
             <button
@@ -381,8 +533,9 @@ function LoginForm() {
             policyType="auth"
             links={[
               {
+                target: "_blank",
                 label: "Forgot Password?",
-                href: "/forgot-password",
+                href: "https://sbsexam.edu.in/user-login",
                 colorClass: "text-brand-green hover:text-brand-green-hover",
               },
             ]}
@@ -611,76 +764,15 @@ function LoginForm() {
           {/* Active Session Fast SSO Card */}
           {sessionUser ? (
             <div className="space-y-5 animate-[fadeIn_0.3s_ease]">
-              <div className="p-5 rounded-2xl bg-white dark:bg-slate-900/80 border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-4">
-                <div className="flex items-center gap-3.5">
-                  <div className="size-12 rounded-xl bg-gradient-to-br from-brand-orange to-brand-orange-hover text-white flex items-center justify-center font-black text-lg shadow-sm">
-                    {(sessionUser.name || sessionUser.username)
-                      .slice(0, 2)
-                      .toUpperCase()}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
-                        Active SSO Session (24h)
-                      </span>
-                    </div>
-                    <h3 className="text-base font-bold text-slate-900 dark:text-white truncate mt-0.5">
-                      {sessionUser.name || sessionUser.username}
-                    </h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
-                      @{sessionUser.username} • Identity Verified
-                    </p>
-                  </div>
-                </div>
+              {/* Profile card with photo & Name/username/role/email preview (or full payload if dev === true) */}
+              <SessionProfileCard
+                sessionUser={sessionUser}
+                devMode={dev}
+                showNotice={true}
+                appDisplayName={appDisplayName}
+              />
 
-                {/* Returned Data Table in Frontend */}
-                {sessionUser.user && typeof sessionUser.user === "object" && (
-                  <div className="border-t border-slate-100 dark:border-slate-800/80 pt-3 space-y-2">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide text-[11px]">
-                        Returned User Data
-                      </span>
-                      <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded">
-                        {Object.keys(sessionUser.user).length} attributes
-                      </span>
-                    </div>
-                    <div className="border border-slate-200/70 dark:border-slate-800 rounded-xl overflow-hidden bg-slate-50/50 dark:bg-slate-950/40 text-xs">
-                      <table className="w-full text-left border-collapse">
-                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
-                          {Object.entries(sessionUser.user).map(
-                            ([key, val]) => (
-                              <tr
-                                key={key}
-                                className="hover:bg-slate-100/50 dark:hover:bg-slate-800/30"
-                              >
-                                <td className="py-2 px-3 font-mono font-medium text-slate-600 dark:text-slate-400 w-1/3 text-[11px]">
-                                  {key}
-                                </td>
-                                <td className="py-2 px-3 text-slate-900 dark:text-slate-100 font-medium text-[11px] break-all">
-                                  {val === null
-                                    ? "null"
-                                    : typeof val === "object"
-                                      ? JSON.stringify(val)
-                                      : String(val)}
-                                </td>
-                              </tr>
-                            ),
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-
-                <div className="border-t border-slate-100 dark:border-slate-800/80 pt-3">
-                  <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                    Click continue to authorize and pass your verified identity
-                    data to <strong>{appDisplayName}</strong>.
-                  </p>
-                </div>
-              </div>
-
-              {/* Action Buttons */}
+              {/* Action Buttons: If redirected from /api/auth/callback, auto-triggered. If not, option to continue or change user */}
               <div className="space-y-2.5">
                 <button
                   type="button"
@@ -710,7 +802,7 @@ function LoginForm() {
                   className="w-full py-3 px-4 bg-slate-100 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold rounded-xl text-xs transition-colors cursor-pointer flex items-center justify-center gap-2 border border-slate-200/60 dark:border-slate-700/50"
                 >
                   <ArrowLeftRight className="w-4 h-4 text-slate-500 dark:text-slate-400" />
-                  <span>Sign in with a different account</span>
+                  <span>Change User (SBS Exam login required)</span>
                 </button>
 
                 {/* Dev Login button when dev === true */}
@@ -753,7 +845,9 @@ function LoginForm() {
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="size-1.5 rounded-full bg-emerald-500" />
-                    <span>Single Sign-On session valid for 24 hours</span>
+                    <span>
+                      Single Sign-On session valid for 30 days (1 month)
+                    </span>
                   </div>
                 </div>
               </div>

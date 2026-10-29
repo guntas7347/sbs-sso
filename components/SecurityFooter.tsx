@@ -5,6 +5,7 @@ interface FooterLink {
   label: string;
   href: string;
   colorClass: string;
+  target?: string;
 }
 
 interface SecurityFooterProps {
@@ -32,6 +33,7 @@ export function SecurityFooter({ policyType, links }: SecurityFooterProps) {
             <React.Fragment key={link.href}>
               <Link
                 href={link.href}
+                target="_blank"
                 className={`${link.colorClass} hover:underline transition-colors`}
               >
                 {link.label}
