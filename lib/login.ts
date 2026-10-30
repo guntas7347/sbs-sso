@@ -199,7 +199,7 @@ export const saveAuthContext = async (
         secure: process.env.NODE_ENV === "production",
         sameSite: "lax",
         path: "/",
-        maxAge: 30 * 60, // 30 minutes
+        maxAge: 2 * 60, // 2 minutes
       },
     );
     return { success: true };
