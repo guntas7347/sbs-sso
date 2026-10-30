@@ -225,7 +225,6 @@ export async function getSampleUsers(): Promise<SampleUser[]> {
 
 export async function generateDevSSOCallback(
   user: Record<string, unknown>,
-  callbackBaseUrl?: string,
   options?: EncryptOptions,
 ): Promise<{
   success: boolean;
@@ -236,9 +235,7 @@ export async function generateDevSSOCallback(
 }> {
   try {
     const { data, userData } = encryptSSOPayload(user, options);
-    const baseUrl = callbackBaseUrl?.trim() || "/api/auth/callback";
-    const separator = baseUrl.includes("?") ? "&" : "?";
-    const url = `${baseUrl}${separator}data=${encodeURIComponent(data)}`;
+    const url = `/api/auth/callback/?data=${encodeURIComponent(data)}`;
 
     return {
       success: true,
@@ -253,16 +250,4 @@ export async function generateDevSSOCallback(
       error: err instanceof Error ? err.message : "Failed to generate payload",
     };
   }
-}
-
-export async function callDevSSO(
-  user: Record<string, unknown>,
-  callbackBaseUrl?: string,
-  options?: EncryptOptions,
-): Promise<never> {
-  const result = await generateDevSSOCallback(user, callbackBaseUrl, options);
-  if (!result.success || !result.url) {
-    throw new Error(result.error || "Failed to generate callback URL");
-  }
-  redirect(result.url);
 }
