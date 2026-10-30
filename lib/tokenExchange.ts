@@ -85,7 +85,6 @@ export async function processTokenExchange(
       const codeVerify = generateCodeChallenge(code_verifier as string);
 
       if (codeVerify !== codeChallenge) {
-        console.log("INVALID CODE VERIFIER (S2 PKCE)");
         return NextResponse.json(
           { success: false, message: "Invalid code verifier" },
           { status: 400 },

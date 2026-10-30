@@ -74,7 +74,6 @@ async function handleCallback(req: NextRequest, dataString: string | null) {
 
   try {
     const rawData = decryptSSOData(dataString);
-    console.log("Decrypted SSO payload:", rawData);
 
     const userObj: Record<string, unknown> =
       rawData &&
@@ -141,8 +140,7 @@ async function handleCallback(req: NextRequest, dataString: string | null) {
       req.nextUrl.searchParams.get("redirectUri") ||
       contextData.redirectUri;
 
-    const nameParam =
-      req.nextUrl.searchParams.get("name") || contextData.name;
+    const nameParam = req.nextUrl.searchParams.get("name") || contextData.name;
 
     // Redirect to app/page.tsx with the context parameters preserved
     const targetUrl = new URL("/", req.url);
@@ -198,7 +196,10 @@ export async function POST(req: NextRequest) {
     } catch {
       data = null;
     }
-  } else if (contentType.includes("application/x-www-form-urlencoded") || contentType.includes("multipart/form-data")) {
+  } else if (
+    contentType.includes("application/x-www-form-urlencoded") ||
+    contentType.includes("multipart/form-data")
+  ) {
     try {
       const formData = await req.formData();
       data = (formData.get("data") as string) || null;
