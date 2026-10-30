@@ -17,7 +17,7 @@ export type AuthorizationCodePayload = {
 export type SessionTokenPayload = {
   username: string;
   name?: string;
-  user?: Record<string, unknown>;
+  user?: object;
   [key: string]: unknown;
 };
 

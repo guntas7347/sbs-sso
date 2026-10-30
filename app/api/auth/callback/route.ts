@@ -7,6 +7,8 @@ import { createSessionToken } from "@/lib/jwt";
 export const runtime = "nodejs";
 
 const AAD = "sso.sbssu.ac.in";
+const MAX_DATA_LENGTH = 100_000;
+const MAX_CONTEXT_VALUE_LENGTH = 4_096;
 
 interface EncryptedPackage {
   iv: string;
@@ -14,198 +16,414 @@ interface EncryptedPackage {
   ciphertext: string;
 }
 
-function decryptSSOData(data: string): Record<string, unknown> {
+export interface SSOPayload {
+  jti: string;
+  exp: number;
+  username: string;
+  fullname: string;
+  father_name: string;
+  role: string;
+  email: string;
+  degree: string;
+  specialization: string;
+  mobile: string;
+}
+
+interface SSOContext {
+  callBack?: string;
+  challenge?: string;
+  redirectUri?: string;
+  name?: string;
+}
+
+function getPublicOrigin(req: NextRequest): string {
+  const host = req.headers.get("x-forwarded-host");
+  const proto = req.headers.get("x-forwarded-proto");
+
+  if (!host || !proto) {
+    throw new Error("Missing forwarded host or protocol");
+  }
+
+  // Reject comma-separated values rather than guessing which proxy value
+  // represents the public request.
+  if (host.includes(",") || proto.includes(",") || /[\s/@\\?#]/.test(host)) {
+    throw new Error("Invalid forwarded host or protocol");
+  }
+
+  if (proto !== "https" && proto !== "http") {
+    throw new Error("Invalid forwarded protocol");
+  }
+
+  const url = new URL(`${proto}://${host}`);
+
+  if (
+    url.hostname.length === 0 ||
+    url.username ||
+    url.password ||
+    url.pathname !== "/" ||
+    url.search ||
+    url.hash
+  ) {
+    throw new Error("Invalid forwarded origin");
+  }
+
+  // Configure your reverse proxy to overwrite forwarded headers and
+  // prevent untrusted clients from reaching the app directly.
+  return url.origin;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function requireString(
+  value: unknown,
+  field: string,
+  maxLength = 1_000,
+): string {
+  if (
+    typeof value !== "string" ||
+    value.trim().length === 0 ||
+    value.length > maxLength
+  ) {
+    throw new Error(`Invalid SSO field: ${field}`);
+  }
+
+  return value.trim();
+}
+
+function validateSSOPayload(value: unknown): SSOPayload {
+  if (!isRecord(value)) {
+    throw new Error("Invalid SSO payload structure");
+  }
+
+  // Support both the direct payload and a payload nested under "user".
+  const user = isRecord(value.user) ? value.user : value;
+
+  const jti = requireString(value.jti, "jti", 128);
+  const exp = value.exp;
+
+  if (typeof exp !== "number" || !Number.isSafeInteger(exp) || exp <= 0) {
+    throw new Error("Invalid SSO expiration");
+  }
+
+  // exp is Unix time in seconds.
+  if (exp <= Math.floor(Date.now() / 1000)) {
+    throw new Error("SSO payload has expired");
+  }
+
+  const username = requireString(
+    user.username ?? user.rollNo ?? user.roll_number ?? user.id ?? user.userId,
+    "username",
+    256,
+  );
+
+  const fullname = requireString(
+    user.fullname ?? user.fullName ?? user.full_name ?? user.name ?? username,
+    "fullname",
+    256,
+  );
+
+  const fatherName =
+    typeof user.father_name === "string" ? user.father_name : "";
+
+  const email = typeof user.email === "string" ? user.email : "";
+
+  const role = requireString(user.role, "role", 128);
+
+  return {
+    jti,
+    exp,
+    username,
+    fullname,
+    father_name: fatherName,
+    role,
+    email,
+    degree: typeof user.degree === "string" ? user.degree : "",
+    specialization:
+      typeof user.specialization === "string" ? user.specialization : "",
+    mobile: typeof user.mobile === "string" ? user.mobile : "",
+  };
+}
+
+function decryptSSOData(data: string): SSOPayload {
+  if (!data || data.length > MAX_DATA_LENGTH) {
+    throw new Error("Invalid SSO payload size");
+  }
+
   const keyConfig = process.env.SSO_DECRYPTION_KEY;
 
   if (!keyConfig?.startsWith("base64:")) {
     throw new Error("Invalid SSO_DECRYPTION_KEY configuration");
   }
 
-  // Decode the shared key.
-  const key = Buffer.from(keyConfig.slice(7), "base64");
+  const key = Buffer.from(keyConfig.slice("base64:".length), "base64");
 
   if (key.length !== 32) {
     throw new Error("SSO key must be exactly 32 bytes");
   }
 
-  // Decode the URL-safe Base64 container.
-  const decoded = Buffer.from(data, "base64url").toString("utf8");
+  let encryptedPackage: unknown;
 
-  const payload = JSON.parse(decoded) as EncryptedPackage;
+  try {
+    const decoded = Buffer.from(data, "base64url").toString("utf8");
+    encryptedPackage = JSON.parse(decoded);
+  } catch {
+    throw new Error("Malformed encrypted SSO package");
+  }
+
+  if (!isRecord(encryptedPackage)) {
+    throw new Error("Invalid encrypted SSO package");
+  }
+
+  const payload = encryptedPackage as unknown as EncryptedPackage;
 
   if (
     typeof payload.iv !== "string" ||
     typeof payload.tag !== "string" ||
     typeof payload.ciphertext !== "string"
   ) {
-    throw new Error("Malformed encrypted SSO payload");
+    throw new Error("Missing encrypted SSO components");
   }
 
-  // Decode the encryption components.
   const iv = Buffer.from(payload.iv, "base64");
   const tag = Buffer.from(payload.tag, "base64");
   const ciphertext = Buffer.from(payload.ciphertext, "base64");
 
-  if (iv.length !== 12 || tag.length !== 16) {
-    throw new Error("Invalid AES-GCM IV or authentication tag");
+  if (iv.length !== 12 || tag.length !== 16 || ciphertext.length === 0) {
+    throw new Error("Invalid AES-GCM encrypted components");
   }
 
-  // AES-256-GCM authenticated decryption.
   const decipher = createDecipheriv("aes-256-gcm", key, iv);
 
   decipher.setAAD(Buffer.from(AAD, "utf8"));
   decipher.setAuthTag(tag);
 
+  // decipher.final() throws if authentication fails or the data was altered.
   const decrypted = Buffer.concat([
     decipher.update(ciphertext),
     decipher.final(),
-  ]);
+  ]).toString("utf8");
 
-  // Return the decrypted JSON object.
-  return JSON.parse(decrypted.toString("utf8"));
+  let rawPayload: unknown;
+
+  try {
+    rawPayload = JSON.parse(decrypted);
+  } catch {
+    throw new Error("Decrypted SSO payload is not valid JSON");
+  }
+
+  return validateSSOPayload(rawPayload);
 }
 
-async function handleCallback(req: NextRequest, dataString: string | null) {
-  if (!dataString) {
-    const errorUrl = new URL("/", req.url);
-    errorUrl.searchParams.set("error", "Missing SSO payload data parameter");
-    return NextResponse.redirect(errorUrl);
+function readContextCookie(req: NextRequest): SSOContext {
+  const value = req.cookies.get("sso_auth_context")?.value;
+
+  if (!value || value.length > MAX_CONTEXT_VALUE_LENGTH) {
+    return {};
   }
 
   try {
-    const rawData = decryptSSOData(dataString);
+    const parsed: unknown = JSON.parse(value);
 
-    const userObj: Record<string, unknown> =
-      rawData &&
-      typeof rawData === "object" &&
-      rawData.user &&
-      typeof rawData.user === "object"
-        ? (rawData.user as Record<string, unknown>)
-        : (rawData as Record<string, unknown>);
+    if (!isRecord(parsed)) {
+      return {};
+    }
 
-    const username = String(
-      userObj.username ||
-        userObj.rollNo ||
-        userObj.roll_number ||
-        userObj.id ||
-        userObj.userId ||
-        userObj.email ||
-        "user",
+    const readOptional = (value: unknown): string | undefined =>
+      typeof value === "string" &&
+      value.length > 0 &&
+      value.length <= MAX_CONTEXT_VALUE_LENGTH
+        ? value
+        : undefined;
+
+    return {
+      callBack: readOptional(parsed.callBack),
+      challenge: readOptional(parsed.challenge),
+      redirectUri: readOptional(parsed.redirectUri),
+      name: readOptional(parsed.name),
+    };
+  } catch {
+    return {};
+  }
+}
+
+function getContextValue(
+  req: NextRequest,
+  queryNames: string[],
+  cookieValue?: string,
+): string | undefined {
+  for (const name of queryNames) {
+    const value = req.nextUrl.searchParams.get(name);
+
+    if (value && value.length <= MAX_CONTEXT_VALUE_LENGTH) {
+      return value;
+    }
+  }
+
+  return cookieValue;
+}
+
+function errorResponse(
+  req: NextRequest,
+  message: string,
+  status = 400,
+): NextResponse {
+  try {
+    const url = new URL("/", getPublicOrigin(req));
+    url.searchParams.set("error", message);
+
+    return NextResponse.redirect(url, { status: 303 });
+  } catch {
+    // Do not fall back to req.url: it may contain an internal Docker hostname.
+    return NextResponse.json({ error: message }, { status });
+  }
+}
+
+async function handleCallback(
+  req: NextRequest,
+  data: string | null,
+): Promise<NextResponse> {
+  if (!data || typeof data !== "string") {
+    return errorResponse(req, "Missing SSO payload data parameter");
+  }
+
+  let publicOrigin: string;
+
+  try {
+    publicOrigin = getPublicOrigin(req);
+  } catch (error) {
+    console.error(
+      "SSO public-origin error:",
+      error instanceof Error ? error.message : "Unknown error",
     );
 
-    const name = String(
-      userObj.name ||
-        userObj.fullName ||
-        userObj.full_name ||
-        userObj.username ||
-        username,
+    return NextResponse.json(
+      { error: "Unable to determine the public request origin" },
+      { status: 400 },
     );
+  }
 
-    // Create 24-hour local JWT session cookie
+  try {
+    const payload = decryptSSOData(data);
+
+    /*
+     * REPLAY PROTECTION:
+     * Before creating a session, atomically check and consume payload.jti
+     * in a shared Redis/database store, with a TTL until payload.exp.
+     *
+     * Do not use an in-memory Set in production when multiple processes or
+     * containers can handle requests.
+     */
+
+    const username = payload.username;
+    const name = payload.fullname;
+
     const sessionToken = await createSessionToken({
       username,
       name,
-      user: userObj,
+      user: payload,
     });
 
-    // Check for saved handshake context from previous request
-    let contextData: {
-      callBack?: string;
-      challenge?: string;
-      redirectUri?: string;
-      name?: string;
-    } = {};
+    const contextData = readContextCookie(req);
 
-    const contextCookie = req.cookies.get("sso_auth_context");
-    if (contextCookie?.value) {
-      try {
-        contextData = JSON.parse(contextCookie.value);
-      } catch (err) {
-        console.warn("Failed to parse sso_auth_context cookie:", err);
-      }
+    const callBack = getContextValue(
+      req,
+      ["callBack", "callback"],
+      contextData.callBack,
+    );
+
+    const challenge = getContextValue(
+      req,
+      ["challenge", "code_challenge"],
+      contextData.challenge,
+    );
+
+    const redirectUri = getContextValue(
+      req,
+      ["redirect_uri", "redirectUri"],
+      contextData.redirectUri,
+    );
+
+    const nameParam = getContextValue(req, ["name"], contextData.name);
+
+    const targetUrl = new URL("/", publicOrigin);
+
+    if (callBack) {
+      targetUrl.searchParams.set("callBack", callBack);
     }
 
-    const callBack =
-      req.nextUrl.searchParams.get("callBack") ||
-      req.nextUrl.searchParams.get("callback") ||
-      contextData.callBack;
+    if (challenge) {
+      targetUrl.searchParams.set("challenge", challenge);
+    }
 
-    const challenge =
-      req.nextUrl.searchParams.get("challenge") ||
-      req.nextUrl.searchParams.get("code_challenge") ||
-      contextData.challenge;
+    if (redirectUri) {
+      targetUrl.searchParams.set("redirect_uri", redirectUri);
+    }
 
-    const redirectUri =
-      req.nextUrl.searchParams.get("redirect_uri") ||
-      req.nextUrl.searchParams.get("redirectUri") ||
-      contextData.redirectUri;
+    if (nameParam) {
+      targetUrl.searchParams.set("name", nameParam);
+    }
 
-    const nameParam = req.nextUrl.searchParams.get("name") || contextData.name;
-
-    // Redirect to app/page.tsx with the context parameters preserved
-    const targetUrl = new URL("/", req.url);
-    if (callBack) targetUrl.searchParams.set("callBack", callBack);
-    if (challenge) targetUrl.searchParams.set("challenge", challenge);
-    if (redirectUri) targetUrl.searchParams.set("redirect_uri", redirectUri);
-    if (nameParam) targetUrl.searchParams.set("name", nameParam);
     targetUrl.searchParams.set("from_callback", "true");
 
-    const response = NextResponse.redirect(targetUrl);
+    const response = NextResponse.redirect(targetUrl, { status: 303 });
 
-    // Persist 1-month (30-day) SSO session cookie
     response.cookies.set("sso_session", sessionToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       path: "/",
-      maxAge: 30 * 24 * 60 * 60, // 30 days (1 month)
+      maxAge: 30 * 24 * 60 * 60,
     });
 
-    // Clear the temporary context cookie
     response.cookies.delete("sso_auth_context");
 
     return response;
   } catch (error) {
     console.error(
-      "SSO decryption or callback failed:",
+      "SSO callback failed:",
       error instanceof Error ? error.message : "Unknown error",
     );
 
-    const errorUrl = new URL("/", req.url);
-    errorUrl.searchParams.set(
+    const url = new URL("/", publicOrigin);
+    url.searchParams.set(
       "error",
-      "Authentication failed: Unable to verify encrypted SSO handshake.",
+      "Authentication failed. The SSO payload could not be verified.",
     );
-    return NextResponse.redirect(errorUrl);
+
+    return NextResponse.redirect(url, { status: 303 });
   }
 }
 
-export async function GET(req: NextRequest) {
-  const data = req.nextUrl.searchParams.get("data");
-  return handleCallback(req, data);
+export async function GET(req: NextRequest): Promise<NextResponse> {
+  return handleCallback(req, req.nextUrl.searchParams.get("data"));
 }
 
-export async function POST(req: NextRequest) {
+export async function POST(req: NextRequest): Promise<NextResponse> {
   let data: string | null = null;
-  const contentType = req.headers.get("content-type") || "";
+  const contentType = req.headers.get("content-type") ?? "";
 
-  if (contentType.includes("application/json")) {
-    try {
-      const json = await req.json();
-      data = json?.data || null;
-    } catch {
-      data = null;
-    }
-  } else if (
-    contentType.includes("application/x-www-form-urlencoded") ||
-    contentType.includes("multipart/form-data")
-  ) {
-    try {
+  try {
+    if (contentType.includes("application/json")) {
+      const body: unknown = await req.json();
+
+      if (isRecord(body) && typeof body.data === "string") {
+        data = body.data;
+      }
+    } else if (
+      contentType.includes("application/x-www-form-urlencoded") ||
+      contentType.includes("multipart/form-data")
+    ) {
       const formData = await req.formData();
-      data = (formData.get("data") as string) || null;
-    } catch {
-      data = null;
+      const value = formData.get("data");
+
+      if (typeof value === "string") {
+        data = value;
+      }
     }
+  } catch {
+    // Fall back to the query parameter if the request body is malformed.
   }
 
   if (!data) {
