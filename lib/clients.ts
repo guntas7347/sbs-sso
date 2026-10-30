@@ -14,7 +14,7 @@ export const clients = {
     description: "Google FORM like interface for students",
     logo: "/clients/grievance.png",
     live: true,
-    redirectUri: "https://form.sbssu.ac.in/api/auth/callback",
+    redirectUri: "https://forms.sbssu.ac.in/api/auth/callback",
   },
   "sbs-form-dev": {
     name: "SBS FORM (DEVMODE)",
