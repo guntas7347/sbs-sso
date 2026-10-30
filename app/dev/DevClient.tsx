@@ -95,8 +95,6 @@ export default function DevClient({ sampleUsers }: DevClientProps) {
         );
       }
 
-      console.log(result);
-
       setLastGeneratedUrl(result.url);
       setLastPayload(result.payload || null);
 

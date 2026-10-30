@@ -228,8 +228,7 @@ export const redirectToSourceSSO = async (
     },
   );
 
-  const sourceUrl =
-    process.env.SOURCE_SSO_LOGIN_URL || "https://sbsexam.edu.in/user-login";
+  const sourceUrl = "https://sbsexam.edu.in/user-login";
   redirect(sourceUrl);
 };
 
