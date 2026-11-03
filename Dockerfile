@@ -23,7 +23,7 @@ FROM node:22-alpine AS runner
 
 WORKDIR /app
 
-ENV NODE_ENV=production
+ENV NODE_ENV=dev
 ENV PORT=3000
 
 COPY --from=builder /app/.next/standalone ./
