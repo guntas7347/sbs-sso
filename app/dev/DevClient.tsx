@@ -16,10 +16,13 @@ import {
   ChevronDown,
   ArrowLeft,
 } from "lucide-react";
+import { notFound } from "next/navigation";
 
 interface DevClientProps {
   sampleUsers: SampleUser[];
 }
+
+const prod = process.env.NODE_ENV === "production";
 
 export default function DevClient({ sampleUsers }: DevClientProps) {
   const [mode, setMode] = useState<"sample" | "custom">("sample");
@@ -135,6 +138,8 @@ export default function DevClient({ sampleUsers }: DevClientProps) {
       setError(err instanceof Error ? err.message : "Failed to copy URL");
     }
   }
+
+  if (prod) return <div>404</div>;
 
   return (
     <div className="min-h-screen bg-slate-100 dark:bg-[#090d16] text-slate-800 dark:text-slate-100 transition-colors duration-300 py-10 px-4 sm:px-6">

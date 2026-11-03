@@ -123,10 +123,12 @@ function validateSSOPayload(value: unknown): SSOPayload {
     "fullname",
     256,
   );
-
   const fatherName =
-    typeof user.father_name === "string" ? user.father_name : "";
-
+    typeof user.father_name === "string"
+      ? user.father_name
+      : typeof user.fatherName === "string"
+        ? user.fatherName
+        : "";
   const email = typeof user.email === "string" ? user.email : "";
 
   const role = requireString(user.role, "role", 128);

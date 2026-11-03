@@ -8,7 +8,6 @@ import {
 import { clients, ClientId } from "./clients";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
-import { sarthiGetUser } from "./sarthi";
 
 const appendCodeToUri = (uri: string, code: string) => {
   try {
@@ -18,78 +17,6 @@ const appendCodeToUri = (uri: string, code: string) => {
   } catch {
     return uri.includes("?") ? `${uri}&code=${code}` : `${uri}?code=${code}`;
   }
-};
-
-export const handleLogin = async (
-  username: string,
-  password?: string,
-  totp?: string,
-  callbackId?: string,
-  challenge?: string,
-  redirectUri?: string,
-  isUnregistered?: boolean,
-) => {
-  let redirectUrl: string | null = null;
-  let userData: Record<string, unknown> | null = null;
-
-  try {
-    const result = await sarthiGetUser(username);
-    if (!result.success || !result.data?.user) {
-      return {
-        success: false,
-        error: result.error || "Invalid username or user not found",
-      };
-    }
-
-    const user = result.data.user;
-    const fullName = user.name || user.username;
-    userData = user as unknown as Record<string, unknown>;
-
-    // Create 1-month (30-day) local JWT session cookie
-    const sessionToken = await createSessionToken({
-      username: user.username,
-      name: fullName,
-      user: userData,
-    });
-
-    const cookieStore = await cookies();
-    cookieStore.set("sso_session", sessionToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      maxAge: 30 * 24 * 60 * 60, // 30 days (1 month)
-    });
-
-    const authCode = await createAuthorizationCode({
-      username: user.username,
-      codeChallenge: challenge,
-      isUnregistered: isUnregistered ? true : undefined,
-      user: userData,
-    });
-
-    if (isUnregistered && redirectUri) {
-      redirectUrl = appendCodeToUri(redirectUri, authCode);
-    } else if (callbackId && clients[callbackId as ClientId]) {
-      const targetUri = clients[callbackId as ClientId].redirectUri;
-      redirectUrl = appendCodeToUri(targetUri, authCode);
-    }
-  } catch (error) {
-    console.error("Login action error:", error);
-    return {
-      success: false,
-      error: "Authentication Failed",
-    };
-  }
-
-  if (redirectUrl) {
-    redirect(redirectUrl);
-  }
-
-  return {
-    success: true,
-    data: userData,
-  };
 };
 
 export const getActiveSession = async () => {

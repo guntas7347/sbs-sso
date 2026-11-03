@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { verifyJwtToken } from "@/lib/jwt";
 import crypto from "crypto";
-import { sarthiGetUser } from "@/lib/sarthi";
 
 export interface UserData {
   username: string;
@@ -110,13 +109,6 @@ export async function processTokenExchange(
       userData = (
         user.user && typeof user.user === "object" ? user.user : user
       ) as Record<string, unknown>;
-    }
-
-    if (!userData) {
-      const result = await sarthiGetUser(username);
-      if (result.success && result.data?.user) {
-        userData = result.data.user as unknown as Record<string, unknown>;
-      }
     }
 
     if (!userData) {

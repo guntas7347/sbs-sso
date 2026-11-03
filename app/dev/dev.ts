@@ -221,6 +221,8 @@ const sampleUsers: any = [
   },
 ];
 
+const prod = process.env.NODE_ENV === "production";
+
 const DEFAULT_AAD = "sso.sbssu.ac.in";
 
 export interface EncryptOptions {
@@ -236,6 +238,8 @@ function encryptSSOPayload(
   packageObject: { iv: string; tag: string; ciphertext: string };
   userData: Record<string, unknown>;
 } {
+  if (prod) throw Error("DEV MODE OFF");
+
   const keyConfig = process.env.SSO_DECRYPTION_KEY;
   if (!keyConfig) {
     throw new Error(

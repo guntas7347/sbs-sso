@@ -43,7 +43,7 @@ import { CheckingSessionOverlay } from "@/components/CheckingSessionOverlay";
 import { SSOLoadingScreen } from "@/components/SSOLoadingScreen";
 
 // Dev mode toggle: set to true to display full payload box and enable Dev Login playground
-const dev = false;
+const dev = process.env.NODE_ENV !== "production";
 
 const REDIRECT_MESSAGES = [
   "Securing cryptographic session...",
@@ -54,7 +54,7 @@ const REDIRECT_MESSAGES = [
 
 // Pre-filter live clients for manual selection
 const LIVE_CLIENTS = (Object.entries(clients) as [ClientId, Client][]).filter(
-  ([, client]) => client.live === true,
+  ([, client]) => dev || client.live === true,
 );
 
 /**
@@ -367,6 +367,20 @@ function LoginForm() {
         loading ? "cursor-wait" : ""
       }`}
     >
+      {dev && (
+        <div className="fixed top-4 right-4 z-50 flex items-center gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm font-medium text-amber-600 shadow-lg backdrop-blur-md">
+          <span className="flex items-center gap-2">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-amber-500" />
+            DEV MODE ON
+          </span>
+          <Link
+            href="/dev"
+            className="rounded-md bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-amber-600"
+          >
+            DEV
+          </Link>
+        </div>
+      )}
       <CheckingSessionOverlay
         checking={checkingSession}
         message={REDIRECT_MESSAGES[loadingMessageIndex]}
