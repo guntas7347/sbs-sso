@@ -117,8 +117,10 @@ export async function processTokenExchange(
       );
     }
 
+    const prod = process.env.NODE_ENV === "production";
+
     // For unregistered child apps, return only username and userId
-    if (isUnregistered) {
+    if (isUnregistered && prod!) {
       const userId =
         userData.id || userData.userId || userData.user_id || username;
       return NextResponse.json({
