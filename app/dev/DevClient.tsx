@@ -34,7 +34,7 @@ export default function DevClient({ sampleUsers }: DevClientProps) {
     email: "dev.tester@example.com",
     role: "student",
     department: "Computer Science and Engineering",
-    fathersName: "Rajesh Tester",
+    fatherName: "Rajesh Tester",
     rollNo: "235099",
   });
 
@@ -58,7 +58,7 @@ export default function DevClient({ sampleUsers }: DevClientProps) {
       id: `custom_${Date.now()}`,
       username: customUser.username.trim(),
       fullName: customUser.name.trim(),
-      fatherName: customUser.fathersName.trim(),
+      fatherName: customUser.fatherName.trim(),
       role: customUser.role.trim() as string,
       email: customUser.email.trim(),
 
