@@ -49,34 +49,33 @@ export default function DevClient({ sampleUsers }: DevClientProps) {
 
   const activeSampleUser =
     sampleUsers.find((u) => u.id === selectedUserId) || sampleUsers[0];
-
-  function getActiveUserObject(): Record<string, unknown> {
+  function getActiveUserObject(): any {
     if (mode === "sample" && activeSampleUser) {
-      return {
-        ...activeSampleUser,
-        username: activeSampleUser.Username,
-        name: activeSampleUser.Name,
-        role: activeSampleUser.Role,
-        email: activeSampleUser.email,
-        department: activeSampleUser["Departure name"],
-        rollNo: activeSampleUser["Roll no"],
-        fathersName: activeSampleUser.FathersName,
-      };
+      return { ...activeSampleUser };
     }
+
     return {
       id: `custom_${Date.now()}`,
       username: customUser.username.trim(),
-      Username: customUser.username.trim(),
-      name: customUser.name.trim(),
-      Name: customUser.name.trim(),
+      fullName: customUser.name.trim(),
+      fatherName: customUser.fathersName.trim(),
+      role: customUser.role.trim() as string,
       email: customUser.email.trim(),
-      role: customUser.role.trim(),
-      Role: customUser.role.trim(),
-      "Departure name": customUser.department.trim(),
+
+      degree: "",
+      specialization: "",
       department: customUser.department.trim(),
-      "Roll no": customUser.rollNo.trim() || null,
+
+      mobile: "",
+      photo: "",
+
       rollNo: customUser.rollNo.trim() || null,
-      FathersName: customUser.fathersName.trim(),
+      admissionYear: null,
+      session: "",
+      semester: null,
+
+      designation: "",
+      createdAt: new Date().toISOString(),
     };
   }
 
@@ -206,8 +205,8 @@ export default function DevClient({ sampleUsers }: DevClientProps) {
                 >
                   {sampleUsers.map((user: SampleUser) => (
                     <option key={user.id} value={user.id}>
-                      {user.Name} — @{user.Username} ({user.Role.toUpperCase()})
-                      • {user["Departure name"]}
+                      {user.fullName} — @{user.username} (
+                      {user.role.toUpperCase()}) • {user["department"]}
                     </option>
                   ))}
                 </select>
@@ -218,21 +217,21 @@ export default function DevClient({ sampleUsers }: DevClientProps) {
                 <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 space-y-3">
                   <div className="flex items-center gap-3">
                     <div className="size-11 rounded-xl bg-gradient-to-br from-brand-orange to-brand-orange-hover text-white flex items-center justify-center font-black text-sm shadow-sm">
-                      {activeSampleUser.Name.slice(0, 2).toUpperCase()}
+                      {activeSampleUser.fullName.slice(0, 2).toUpperCase()}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-brand-orange/10 text-brand-orange border border-brand-orange/20">
-                          {activeSampleUser.Role}
+                          {activeSampleUser.role}
                         </span>
-                        {activeSampleUser["Roll no"] && (
+                        {activeSampleUser["rollNo"] && (
                           <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400">
-                            Roll: {activeSampleUser["Roll no"]}
+                            Roll: {activeSampleUser["rollNo"]}
                           </span>
                         )}
                       </div>
                       <h2 className="text-sm font-bold text-slate-900 dark:text-white truncate mt-0.5">
-                        {activeSampleUser.Name}
+                        {activeSampleUser.fullName}
                       </h2>
                       <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
                         {activeSampleUser.email}
@@ -246,7 +245,7 @@ export default function DevClient({ sampleUsers }: DevClientProps) {
                         Username
                       </span>
                       <span className="font-mono text-slate-700 dark:text-slate-300">
-                        {activeSampleUser.Username}
+                        {activeSampleUser.username}
                       </span>
                     </div>
                     <div>
@@ -254,7 +253,7 @@ export default function DevClient({ sampleUsers }: DevClientProps) {
                         Department
                       </span>
                       <span className="text-slate-700 dark:text-slate-300 truncate block">
-                        {activeSampleUser["Departure name"]}
+                        {activeSampleUser["department"]}
                       </span>
                     </div>
                   </div>

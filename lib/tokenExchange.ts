@@ -3,6 +3,18 @@ import { verifyJwtToken } from "@/lib/jwt";
 import crypto from "crypto";
 import { sarthiGetUser } from "@/lib/sarthi";
 
+export interface UserData {
+  username: string;
+  fullName: string;
+  fatherName: string;
+  role: string;
+  email: string;
+  degree: string;
+  specialization: string;
+  mobile: string;
+  photo: string;
+}
+
 export async function processTokenExchange(
   request: Request,
   requirePKCE: boolean,
@@ -133,7 +145,8 @@ export async function processTokenExchange(
     }
 
     // Standardize user payload format without internal claims (jti, exp, iat) or duplicate keys
-    const userPayload: Record<string, unknown> = {
+
+    const userPayload: UserData = {
       username: String(userData.username || userData.Username || username),
       fullName: String(
         userData.fullName ||
@@ -171,7 +184,6 @@ export async function processTokenExchange(
           "",
       ),
     };
-
     return NextResponse.json({
       success: true,
       user: userPayload,
