@@ -1,6 +1,13 @@
 "use server";
 
-import { createCipheriv, randomBytes, randomUUID } from "node:crypto";
+import {
+  createCipheriv,
+  createDecipheriv,
+  randomBytes,
+  randomUUID,
+} from "node:crypto";
+
+const AAD = "sso.sbssu.ac.in";
 
 export type UserRole = "student" | "faculty" | "admin";
 
@@ -344,6 +351,91 @@ export async function generateDevSSOCallback(
     return {
       success: false,
       error: err instanceof Error ? err.message : "Failed to generate payload",
+    };
+  }
+}
+
+export async function decryptDataPayload(rawPayload: string) {
+  try {
+    if (!rawPayload) {
+      throw new Error("Empty payload provided");
+    }
+
+    const keyConfig = process.env.SSO_DECRYPTION_KEY;
+    if (!keyConfig?.startsWith("base64:")) {
+      throw new Error(
+        "Invalid SSO_DECRYPTION_KEY configuration in environment",
+      );
+    }
+
+    const key = Buffer.from(keyConfig.slice("base64:".length), "base64");
+    if (key.length !== 32) {
+      throw new Error("SSO key must be exactly 32 bytes");
+    }
+
+    let encryptedPackage: any;
+    try {
+      // Decode the base64url wrapper back to the JSON string, then parse
+      const decoded = Buffer.from(rawPayload.trim(), "base64url").toString(
+        "utf8",
+      );
+      encryptedPackage = JSON.parse(decoded);
+    } catch {
+      throw new Error(
+        "Malformed encrypted SSO package (Not a valid Base64URL encoded JSON)",
+      );
+    }
+
+    if (
+      !encryptedPackage ||
+      typeof encryptedPackage !== "object" ||
+      typeof encryptedPackage.iv !== "string" ||
+      typeof encryptedPackage.tag !== "string" ||
+      typeof encryptedPackage.ciphertext !== "string"
+    ) {
+      throw new Error(
+        "Missing or invalid encrypted SSO components (iv, tag, ciphertext)",
+      );
+    }
+
+    const iv = Buffer.from(encryptedPackage.iv, "base64");
+    const tag = Buffer.from(encryptedPackage.tag, "base64");
+    const ciphertext = Buffer.from(encryptedPackage.ciphertext, "base64");
+
+    if (iv.length !== 12 || tag.length !== 16 || ciphertext.length === 0) {
+      throw new Error("Invalid AES-GCM component dimensions");
+    }
+
+    // Initialize decipher with GCM mode
+    const decipher = createDecipheriv("aes-256-gcm", key, iv);
+
+    // Apply Additional Authenticated Data (AAD) and the Auth Tag
+    decipher.setAAD(Buffer.from(AAD, "utf8"));
+    decipher.setAuthTag(tag);
+
+    // Decrypt the ciphertext (will throw if tag or AAD is invalid/tampered)
+    const decryptedString = Buffer.concat([
+      decipher.update(ciphertext),
+      decipher.final(),
+    ]).toString("utf8");
+
+    let parsedData;
+    try {
+      parsedData = JSON.parse(decryptedString);
+    } catch {
+      throw new Error("Decrypted payload is not valid JSON");
+    }
+
+    return {
+      success: true,
+      data: parsedData,
+    };
+  } catch (error) {
+    console.error("SSO Decryption Error:", error);
+    return {
+      success: false,
+      error:
+        error instanceof Error ? error.message : "Failed to decrypt payload",
     };
   }
 }
