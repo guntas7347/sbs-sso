@@ -28,7 +28,7 @@ export const clients = {
     description: "Submit and track university service requests",
     logo: "/clients/grievance.png",
     live: true,
-    redirectUri: "https://grievance.sbssu.ac.in/api/auth/callback",
+    redirectUri: "https://grievances.sbssu.ac.in/api/auth/callback",
   },
   "grievance-dev": {
     name: "SBS Service Portal (DEVMODE)",
