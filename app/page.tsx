@@ -43,7 +43,7 @@ import { CheckingSessionOverlay } from "@/components/CheckingSessionOverlay";
 import { SSOLoadingScreen } from "@/components/SSOLoadingScreen";
 
 // Dev mode toggle: set to true to display full payload box and enable Dev Login playground
-const dev = process.env.NODE_ENV !== "production";
+const dev = process.env.NEXT_PUBLIC_APP_ENV !== "production";
 
 const REDIRECT_MESSAGES = [
   "Securing cryptographic session...",

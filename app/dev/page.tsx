@@ -2,7 +2,7 @@ import { getSampleUsers } from "@/app/dev/dev";
 import DevClient from "./DevClient";
 import { notFound } from "next/navigation";
 
-const prod = process.env.NODE_ENV === "production";
+const prod = process.env.NEXT_PUBLIC_APP_ENV === "production";
 
 export default async function DevPage() {
   const sampleUsers = await getSampleUsers();

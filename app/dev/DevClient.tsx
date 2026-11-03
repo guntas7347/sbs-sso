@@ -22,7 +22,7 @@ interface DevClientProps {
   sampleUsers: SampleUser[];
 }
 
-const prod = process.env.NODE_ENV === "production";
+const prod = process.env.NEXT_PUBLIC_APP_ENV === "production";
 
 export default function DevClient({ sampleUsers }: DevClientProps) {
   const [mode, setMode] = useState<"sample" | "custom">("sample");
