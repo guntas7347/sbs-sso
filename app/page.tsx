@@ -446,18 +446,6 @@ function LoginForm() {
                     </>
                   )}
                 </button>
-
-                <label className="flex items-center justify-center gap-2 text-sm cursor-pointer py-1">
-                  <input
-                    type="checkbox"
-                    checked={rememberMe}
-                    onChange={(e) => setRememberMe(e.target.checked)}
-                    className="h-4 w-4 accent-brand-orange cursor-pointer"
-                  />
-                  <span className="text-slate-600 dark:text-slate-400">
-                    Remember me for 30 days
-                  </span>
-                </label>
               </div>
 
               <SessionProfileCard
