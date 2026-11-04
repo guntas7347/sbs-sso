@@ -333,8 +333,6 @@ async function handleCallback(
       rememberMe,
     });
 
-    const contextData = readContextCookie(req);
-
     const callBack = getContextValue(
       req,
       ["callBack", "callback"],

@@ -134,7 +134,7 @@ export const saveAuthContext = async (
         secure: process.env.NODE_ENV === "production",
         sameSite: "lax",
         path: "/",
-        maxAge: 2 * 60,
+        maxAge: 10 * 60, // 10 MINUTES to safely survive the round-trip to the source SSO portal
       },
     );
 
@@ -143,29 +143,6 @@ export const saveAuthContext = async (
     console.error("Failed to save auth context:", error);
     return { success: false };
   }
-};
-
-export const redirectToSourceSSO = async (
-  callBack?: string,
-  challenge?: string,
-  redirectUri?: string,
-  name?: string,
-) => {
-  const cookieStore = await cookies();
-  cookieStore.set(
-    "sso_auth_context",
-    JSON.stringify({ callBack, challenge, redirectUri, name }),
-    {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      maxAge: 5 * 60, // 5 minutes
-    },
-  );
-
-  const sourceUrl = "https://sbsexam.edu.in/user-login";
-  redirect(sourceUrl);
 };
 
 export const clearSessionAction = async () => {
