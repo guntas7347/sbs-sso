@@ -35,11 +35,10 @@ import {
 } from "@/components/SessionProfileCard";
 import { LiveClientSelector } from "@/components/LiveClientSelector";
 import { RegisteredClientCard } from "@/components/RegisteredClientCard";
-import { ExamPortalGuidance } from "@/components/ExamPortalGuidance";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
 import { CheckingSessionOverlay } from "@/components/CheckingSessionOverlay";
 import { SSOLoadingScreen } from "@/components/SSOLoadingScreen";
-import LeftSection from "@/components/LeftSection";
+import MadeBy from "@/components/MadeBy";
 
 // Dev mode toggle
 const dev = process.env.NEXT_PUBLIC_APP_ENV !== "production";
@@ -231,7 +230,6 @@ function LoginForm() {
     const clientToSave = callBackParam || selectedManualClient;
 
     try {
-      // FIX: Must await to ensure cookie is set before the server action navigates
       await saveAuthContext(
         clientToSave,
         challengeParam,
@@ -279,17 +277,12 @@ function LoginForm() {
     }
   }, [fromCallbackParam, isValidRequest, sessionUser, loading, loginError]);
 
-  const handleStartSourceLogin = async (overrideClientId?: ClientId) => {
+  const handleStartSourceLogin = async () => {
     setLoading(true);
     setLoginError(null);
-
-    const clientToUse =
-      overrideClientId ||
-      (isRegisteredClient ? (callBackParam as ClientId) : selectedManualClient);
     const clientToSave = callBackParam || selectedManualClient;
 
     try {
-      // FIX: Must await to ensure cookie is set before redirecting
       await saveAuthContext(
         clientToSave,
         challengeParam,
@@ -298,11 +291,9 @@ function LoginForm() {
         rememberMe,
       );
 
+      // Client-side instant redirect
       window.location.href = "https://sbsexam.edu.in/user-login";
-
-      setLoading(false);
     } catch (err: unknown) {
-      if (isRedirectError(err)) throw err;
       console.error("Failed to initiate source SSO login:", err);
       setLoginError(
         (err as { message?: string })?.message ||
@@ -338,19 +329,20 @@ function LoginForm() {
 
   return (
     <div
-      className={`flex min-h-screen bg-slate-100 dark:bg-[#090d16] text-slate-800 dark:text-slate-100 transition-colors duration-300 ${
+      className={`flex min-h-screen items-center justify-center bg-slate-100 dark:bg-[#090d16] p-4 sm:p-8 text-slate-800 dark:text-slate-100 transition-colors duration-300 ${
         loading ? "cursor-wait" : ""
       }`}
     >
+      {/* Dev Mode Banner */}
       {dev && (
-        <div className="fixed top-4 right-4 z-50 flex items-center gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm font-medium text-amber-600 shadow-lg backdrop-blur-md">
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 rounded-full border border-amber-500/30 bg-amber-500/10 px-5 py-2 text-sm font-medium text-amber-600 shadow-lg backdrop-blur-md">
           <span className="flex items-center gap-2">
             <span className="h-2 w-2 animate-pulse rounded-full bg-amber-500" />
             DEV MODE ON
           </span>
           <Link
             href="/dev"
-            className="rounded-md bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-amber-600"
+            className="rounded-full bg-amber-500 px-3 py-1 text-xs font-bold text-white transition hover:bg-amber-600"
           >
             DEV
           </Link>
@@ -369,20 +361,14 @@ function LoginForm() {
         onCancel={() => setLoading(false)}
       />
 
-      <LeftSection
-        sessionUser={sessionUser}
-        isUnregisteredChild={isUnregisteredChild}
-        isValidRequest={isValidRequest}
-        isRegisteredClient={isRegisteredClient}
-        currentClient={currentClient}
-        appDisplayName={appDisplayName}
-      />
+      {/* CENTERED CARD LAYOUT */}
+      <div className="w-full max-w-lg bg-white dark:bg-[#0c1220] rounded-3xl shadow-xl border border-slate-200/80 dark:border-slate-800/80 overflow-hidden relative flex flex-col transition-all">
+        {/* Absolute Theme Toggle at top right */}
+        <div className="absolute top-5 right-5 z-10">
+          <ThemeToggle />
+        </div>
 
-      {/* MERGED RIGHT SECTION */}
-      <div className="w-full lg:w-5/12 flex flex-col justify-between p-6 sm:p-12 md:p-16 relative bg-slate-50 dark:bg-[#0c1220] transition-colors duration-300">
-        <ThemeToggle />
-
-        <div className="my-auto w-full max-w-md mx-auto space-y-6 py-8">
+        <div className="p-8 sm:p-10 space-y-6 pt-12">
           <SSOHeader
             title={
               sessionUser
@@ -416,7 +402,7 @@ function LoginForm() {
               onSelectManualClient={setSelectedManualClient}
               onSwitchAndConnect={(key) => {
                 if (sessionUser) handleContinueAsSession(key);
-                else handleStartSourceLogin(key);
+                else handleStartSourceLogin(); // Use direct client redirect
               }}
               disabled={loading}
             />
@@ -431,9 +417,10 @@ function LoginForm() {
             </div>
           )}
 
+          {/* ACTIVE SESSION STATE */}
           {sessionUser ? (
             <div className="space-y-6 animate-[fadeIn_0.3s_ease]">
-              <div className="space-y-3 pt-1">
+              <div className="space-y-3">
                 <button
                   type="button"
                   onClick={() =>
@@ -460,34 +447,17 @@ function LoginForm() {
                   )}
                 </button>
 
-                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <label className="flex items-center justify-center gap-2 text-sm cursor-pointer py-1">
                   <input
                     type="checkbox"
                     checked={rememberMe}
                     onChange={(e) => setRememberMe(e.target.checked)}
-                    className="h-4 w-4 accent-primary cursor-pointer"
+                    className="h-4 w-4 accent-brand-orange cursor-pointer"
                   />
-                  Remember me for 30 days in this device
+                  <span className="text-slate-600 dark:text-slate-400">
+                    Remember me for 30 days
+                  </span>
                 </label>
-                <button
-                  type="button"
-                  disabled={loading}
-                  onClick={handleSwitchAccount}
-                  className="w-full py-3 px-4 bg-slate-100 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold rounded-xl text-xs transition-colors cursor-pointer flex items-center justify-center gap-2 border border-slate-200/60 dark:border-slate-700/50"
-                >
-                  <ArrowLeftRight className="w-4 h-4 text-slate-500 dark:text-slate-400" />
-                  <span>Change User (SBS Exam login required)</span>
-                </button>
-
-                <button
-                  type="button"
-                  disabled={loading}
-                  onClick={handleLogout}
-                  className="w-full py-3 px-4 bg-slate-100 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold rounded-xl text-xs transition-colors cursor-pointer flex items-center justify-center gap-2 border border-slate-200/60 dark:border-slate-700/50"
-                >
-                  <LogOut className="w-4 h-4 text-slate-500 dark:text-slate-400" />
-                  <span>Log Out SSO Session</span>
-                </button>
               </div>
 
               <SessionProfileCard
@@ -497,25 +467,46 @@ function LoginForm() {
                 appDisplayName={appDisplayName}
               />
 
-              {!isValidRequest && (
-                <LiveClientSelector
-                  liveClients={LIVE_CLIENTS}
-                  selectedKey={selectedManualClient}
-                  onSelect={setSelectedManualClient}
+              <div className="grid grid-cols-2 gap-3 pt-2">
+                <button
+                  type="button"
                   disabled={loading}
-                />
+                  onClick={handleSwitchAccount}
+                  className="w-full py-2.5 px-3 bg-slate-100 dark:bg-slate-800/60 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold rounded-xl text-xs transition-colors cursor-pointer flex items-center justify-center gap-2 border border-slate-200/60 dark:border-slate-700/50"
+                >
+                  <ArrowLeftRight className="w-3.5 h-3.5 opacity-70" />
+                  <span>Switch User</span>
+                </button>
+
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={handleLogout}
+                  className="w-full py-2.5 px-3 bg-slate-100 dark:bg-slate-800/60 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold rounded-xl text-xs transition-colors cursor-pointer flex items-center justify-center gap-2 border border-slate-200/60 dark:border-slate-700/50"
+                >
+                  <LogOut className="w-3.5 h-3.5 opacity-70" />
+                  <span>Log Out</span>
+                </button>
+              </div>
+
+              {!isValidRequest && (
+                <div className="pt-2 border-t border-slate-100 dark:border-slate-800/60">
+                  <LiveClientSelector
+                    liveClients={LIVE_CLIENTS}
+                    selectedKey={selectedManualClient}
+                    onSelect={setSelectedManualClient}
+                    disabled={loading}
+                  />
+                </div>
               )}
             </div>
           ) : (
+            // NO ACTIVE SESSION STATE
             <div className="space-y-6 animate-[fadeIn_0.3s_ease]">
-              <div className="space-y-3 pt-1">
+              <div className="space-y-3">
                 <button
                   type="button"
-                  onClick={() =>
-                    handleStartSourceLogin(
-                      !isValidRequest ? selectedManualClient : undefined,
-                    )
-                  }
+                  onClick={() => handleStartSourceLogin()}
                   disabled={loading || checkingSession}
                   className="w-full py-4 px-6 bg-gradient-to-r from-brand-orange via-amber-500 to-brand-orange-hover hover:from-brand-orange-hover hover:to-brand-orange text-white font-extrabold rounded-xl shadow-md hover:shadow-lg hover:shadow-brand-orange/15 transform hover:-translate-y-[1px] active:translate-y-0 active:scale-[0.99] transition-all duration-150 cursor-pointer disabled:opacity-75 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-2.5 text-center text-sm tracking-wide"
                 >
@@ -532,48 +523,73 @@ function LoginForm() {
                   )}
                 </button>
 
-                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <label className="flex items-center justify-center gap-2 text-sm cursor-pointer py-1">
                   <input
                     type="checkbox"
                     checked={rememberMe}
                     onChange={(e) => setRememberMe(e.target.checked)}
-                    className="h-4 w-4 accent-primary cursor-pointer"
+                    className="h-4 w-4 accent-brand-orange cursor-pointer"
                   />
-                  Remember me for 30 days in this device
+                  <span className="text-slate-600 dark:text-slate-400">
+                    Remember me for 30 days
+                  </span>
                 </label>
               </div>
 
-              <div className="p-5 rounded-2xl bg-white dark:bg-slate-900/80 border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-4">
+              {/* Updated Manual Image Guide Block */}
+              <div className="p-5 rounded-2xl bg-slate-50/50 dark:bg-slate-900/50 border border-slate-200/80 dark:border-slate-800 shadow-sm">
                 <div className="flex items-start gap-3.5">
-                  <div className="size-11 rounded-xl bg-emerald-500/10 dark:bg-emerald-500/20 flex items-center justify-center shrink-0">
-                    <ShieldCheck className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                  <div className="size-11 rounded-xl bg-amber-500/10 dark:bg-amber-500/20 flex items-center justify-center shrink-0 mt-1">
+                    <ShieldCheck className="w-5 h-5 text-amber-600 dark:text-amber-400" />
                   </div>
-                  <div className="space-y-1">
-                    <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                      How to Log In Securely
-                    </h3>
-                    <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                      Authentication is completed safely on the University Exam
-                      Portal (<strong>sbsexam.edu.in</strong>). You will be
-                      automatically returned here upon success.
-                    </p>
+                  <div className="space-y-3 w-full">
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                        Manual Action Required
+                      </h3>
+                      <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed mt-1">
+                        Authentication happens securely on{" "}
+                        <strong>sbsexam.edu.in</strong>. Because auto-redirect
+                        is disabled, you must return manually:
+                      </p>
+                    </div>
+
+                    <div className="bg-white dark:bg-slate-800/80 p-3.5 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm space-y-3">
+                      <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
+                        After logging in, locate the{" "}
+                        <strong className="text-slate-900 dark:text-white">
+                          University
+                        </strong>{" "}
+                        card and click{" "}
+                        <strong className="text-slate-900 dark:text-white">
+                          Other University services
+                        </strong>{" "}
+                        to continue.
+                      </p>
+
+                      <div className="relative rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900">
+                        {/* Replace with your actual image path */}
+                        <img
+                          src="/guide-image.png"
+                          alt="Reference showing the 'Other University services' button"
+                          className="w-full h-auto object-cover opacity-90 hover:opacity-100 transition-opacity"
+                          loading="lazy"
+                        />
+                      </div>
+                    </div>
                   </div>
-                </div>
-                <div className="pt-3 border-t border-slate-100 dark:border-slate-800/60">
-                  <ExamPortalGuidance compact={false} />
                 </div>
               </div>
 
               {!isValidRequest && (
-                <div className="space-y-4">
-                  <div className="p-3.5 rounded-2xl bg-amber-500/10 dark:bg-amber-500/10 border border-amber-500/25 dark:border-amber-500/20 text-xs text-slate-700 dark:text-slate-300 space-y-1">
+                <div className="space-y-4 pt-2 border-t border-slate-100 dark:border-slate-800/60">
+                  <div className="p-3.5 rounded-xl bg-amber-500/10 dark:bg-amber-500/10 border border-amber-500/25 text-xs text-slate-700 dark:text-slate-300 space-y-1">
                     <div className="flex items-center gap-2 font-bold text-amber-700 dark:text-amber-400">
                       <AlertTriangle className="size-4 shrink-0" />
                       <span>No Destination Portal Specified</span>
                     </div>
-                    <p className="leading-relaxed">
-                      Select an official campus portal from the live list below
-                      to sign in via the SBS Exam Portal:
+                    <p className="leading-relaxed opacity-90">
+                      Select an official campus portal from the live list below:
                     </p>
                   </div>
 
@@ -587,30 +603,26 @@ function LoginForm() {
               )}
             </div>
           )}
-
-          {dev && (
-            <Link
-              href="/dev"
-              className="w-full py-3 px-4 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-500/30 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm"
-            >
-              <Code2 className="w-4 h-4 text-amber-500" />
-              <span>Dev Login Playground (/dev)</span>
-              <ExternalLink className="w-3.5 h-3.5 ml-auto opacity-70" />
-            </Link>
-          )}
         </div>
 
-        <SecurityFooter
-          policyType="auth"
-          links={[
-            {
-              target: "_blank",
-              label: "Forgot Password?",
-              href: "https://sbsexam.edu.in/user-login",
-              colorClass: "text-brand-green hover:text-brand-green-hover",
-            },
-          ]}
-        />
+        {/* Card Footer */}
+        <div className="bg-slate-50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-slate-800 p-5 mt-auto">
+          <SecurityFooter
+            policyType="auth"
+            links={[
+              {
+                target: "_blank",
+                label: "Forgot Password?",
+                href: "https://sbsexam.edu.in/user-login",
+                colorClass:
+                  "text-brand-green hover:text-brand-green-hover font-semibold",
+              },
+            ]}
+          />
+          <div className="mt-3">
+            <MadeBy />
+          </div>
+        </div>
       </div>
     </div>
   );
