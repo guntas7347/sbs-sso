@@ -119,6 +119,8 @@ function RightSection({
   handleStartSourceLogin,
   handleSwitchAccount,
   handleLogout,
+  onRememberMeChange,
+  rememberMe,
 }: any) {
   return (
     <div className="w-full lg:w-5/12 flex flex-col justify-between p-6 sm:p-12 md:p-16 relative bg-slate-50 dark:bg-[#0c1220] transition-colors duration-300">
@@ -203,6 +205,15 @@ function RightSection({
                 )}
               </button>
 
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => onRememberMeChange(e.target.checked)}
+                  className="h-4 w-4 accent-primary cursor-pointer"
+                />
+                Remember me for 30 days in this device
+              </label>
               <button
                 type="button"
                 disabled={loading}
@@ -267,16 +278,15 @@ function RightSection({
                 )}
               </button>
 
-              {!isValidRequest && (
-                <button
-                  type="button"
-                  onClick={() => handleStartSourceLogin()}
-                  disabled={loading}
-                  className="w-full py-3 px-4 bg-slate-100 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold rounded-xl text-xs transition-colors cursor-pointer flex items-center justify-center gap-2 border border-slate-200/60 dark:border-slate-700/50"
-                >
-                  <span>Direct Sign In via SBS Exam (General Access)</span>
-                </button>
-              )}
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => onRememberMeChange(e.target.checked)}
+                  className="h-4 w-4 accent-primary cursor-pointer"
+                />
+                Remember me for 30 days in this device
+              </label>
             </div>
 
             {/* Simple Readable Login Guide Placed BELOW Login Button */}
@@ -395,6 +405,7 @@ function LoginForm() {
   const [sessionUser, setSessionUser] = useState<SessionUserData | null>(null);
   const [checkingSession, setCheckingSession] = useState(true);
   const [loadingMessageIndex, setLoadingMessageIndex] = useState(0);
+  const [rememberMe, setRememberMe] = useState(false);
 
   const [selectedManualClient, setSelectedManualClient] = useState<ClientId>(
     LIVE_CLIENTS[0]?.[0] || "sbs-form",
@@ -511,6 +522,16 @@ function LoginForm() {
       (isRegisteredClient ? (callBackParam as ClientId) : selectedManualClient);
 
     try {
+      const clientToSave = callBackParam || selectedManualClient;
+
+      saveAuthContext(
+        clientToSave,
+        challengeParam,
+        redirectUriParam,
+        nameParam,
+        rememberMe, // this is for remember me for 30 days on this device
+      );
+
       const res = await handleSessionLogin(
         clientToUse,
         challengeParam,
@@ -562,6 +583,16 @@ function LoginForm() {
       (isRegisteredClient ? (callBackParam as ClientId) : selectedManualClient);
 
     try {
+      const clientToSave = callBackParam || selectedManualClient;
+
+      saveAuthContext(
+        clientToSave,
+        challengeParam,
+        redirectUriParam,
+        nameParam,
+        rememberMe, // this is for remember me for 30 days on this device
+      );
+
       await redirectToSourceSSO(
         clientToUse,
         challengeParam,
@@ -672,6 +703,8 @@ function LoginForm() {
         handleSwitchAccount={handleSwitchAccount}
         handleLogout={handleLogout}
         dev={dev}
+        rememberMe={rememberMe}
+        onRememberMeChange={setRememberMe}
       />
     </div>
   );

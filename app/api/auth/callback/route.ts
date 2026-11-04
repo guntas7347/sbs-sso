@@ -34,6 +34,7 @@ interface SSOContext {
   challenge?: string;
   redirectUri?: string;
   name?: string;
+  rememberMe?: boolean;
 }
 
 function getPublicOrigin(req: NextRequest): string {
@@ -244,6 +245,7 @@ function readContextCookie(req: NextRequest): SSOContext {
       challenge: readOptional(parsed.challenge),
       redirectUri: readOptional(parsed.redirectUri),
       name: readOptional(parsed.name),
+      rememberMe: parsed.rememberMe === true,
     };
   } catch {
     return {};
@@ -292,6 +294,9 @@ async function handleCallback(
 
   let publicOrigin: string;
 
+  const contextData = readContextCookie(req);
+  const rememberMe = contextData.rememberMe === true;
+
   try {
     publicOrigin = getPublicOrigin(req);
   } catch (error) {
@@ -325,6 +330,7 @@ async function handleCallback(
       username,
       name,
       user: payload,
+      rememberMe,
     });
 
     const contextData = readContextCookie(req);
@@ -376,7 +382,9 @@ async function handleCallback(
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       path: "/",
-      maxAge: 30 * 24 * 60 * 60,
+      ...(rememberMe && {
+        maxAge: 30 * 24 * 60 * 60,
+      }), // remember me 30 days or same session only
     });
 
     response.cookies.delete("sso_auth_context");

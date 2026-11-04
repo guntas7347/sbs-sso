@@ -18,6 +18,7 @@ export type SessionTokenPayload = {
   username: string;
   name?: string;
   user?: object;
+  rememberMe?: boolean;
   [key: string]: unknown;
 };
 
@@ -43,6 +44,6 @@ export const createSessionToken = async (
   payload: SessionTokenPayload,
 ): Promise<string> => {
   return jwt.sign(payload, JWT_SECRET, {
-    expiresIn: "30d", // 1 month
+    expiresIn: payload.rememberMe ? "30d" : "1d",
   });
 };

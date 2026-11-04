@@ -115,20 +115,29 @@ export const saveAuthContext = async (
   challenge?: string,
   redirectUri?: string,
   name?: string,
+  rememberMe: boolean = false,
 ) => {
   try {
     const cookieStore = await cookies();
+
     cookieStore.set(
       "sso_auth_context",
-      JSON.stringify({ callBack, challenge, redirectUri, name }),
+      JSON.stringify({
+        callBack,
+        challenge,
+        redirectUri,
+        name,
+        rememberMe,
+      }),
       {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
         sameSite: "lax",
         path: "/",
-        maxAge: 2 * 60, // 2 minutes
+        maxAge: 2 * 60,
       },
     );
+
     return { success: true };
   } catch (error) {
     console.error("Failed to save auth context:", error);
@@ -151,7 +160,7 @@ export const redirectToSourceSSO = async (
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       path: "/",
-      maxAge: 30 * 60, // 30 minutes
+      maxAge: 5 * 60, // 5 minutes
     },
   );
 
