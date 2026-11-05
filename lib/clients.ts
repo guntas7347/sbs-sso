@@ -23,10 +23,9 @@ export const clients = {
     live: true,
     redirectUri: "https://grievances.sbssu.ac.in/api/auth/callback",
   },
-
-  "grievance-dev": {
-    name: "Grievance Portal LOCALHOST",
-    description: "Submit and track university grievance requests.",
+  "localhost-dev": {
+    name: "LOCALHOST",
+    description: "LOCALHOST:3000",
     logo: "sbssu-logo.png",
     live: false,
     redirectUri: "http://localhost:3000/api/auth/callback",
