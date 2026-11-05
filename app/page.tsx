@@ -292,7 +292,7 @@ function LoginForm() {
       );
 
       // Client-side instant redirect
-      window.location.href = "https://sbsexam.edu.in/user-login";
+      window.location.href = "https://sbsexam.edu.in/user-login?callback=sso";
     } catch (err: unknown) {
       console.error("Failed to initiate source SSO login:", err);
       setLoginError(
