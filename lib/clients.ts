@@ -23,6 +23,15 @@ export const clients = {
     live: true,
     redirectUri: "https://grievances.sbssu.ac.in/api/auth/callback",
   },
+
+  "sbssu.ac.in": {
+    name: "SBSSU Website",
+    description: "University Website",
+    logo: "sbssu-logo.png",
+    live: false,
+    redirectUri: "https://sbssu.duckdns.org/api/auth/callback",
+  },
+
   "localhost-dev": {
     name: "LOCALHOST",
     description: "LOCALHOST:3000",
